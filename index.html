@@ -193,6 +193,23 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
 .gender-mode-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
 .genderModeBtn.active{background:#edf6ff;border-color:#76ace2;color:#0c67b8;font-weight:800}
 
+
+.seat.valid .desk{
+  box-shadow:0 0 0 4px rgba(44,165,106,.72),0 4px 0 rgba(112,73,25,.18)!important;
+}
+.seat.invalid{
+  opacity:.56;
+}
+.seat.invalid .desk{
+  box-shadow:0 0 0 3px rgba(217,83,79,.40),0 4px 0 rgba(112,73,25,.18)!important;
+}
+.possible-legend{
+  position:absolute;left:50%;bottom:10px;transform:translateX(-50%);
+  z-index:20;background:#fff;border:1px solid var(--line);border-radius:999px;
+  padding:6px 10px;font-size:11px;font-weight:800;box-shadow:0 4px 14px rgba(16,41,75,.12);
+}
+.possible-legend .ok{color:#218356}.possible-legend .no{color:#bc4742}
+
 </style>
 </head>
 <body>
@@ -357,7 +374,7 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
         <option value="boy">Gutt</option>
         <option value="girl">Jente</option>
       </select>
-      <div class="help">Dette brukes bare av knappene for gutt/jente-fordeling. Ingenting blir gjettet fra elevens navn.</div>
+      <div class="help">Den faste klasselisten er forhåndsutfylt etter tradisjonell navnebruk. Du kan alltid endre kjønn manuelt her.</div>
     </div>
     <div class="checkgrid">
       <label class="check"><input type="checkbox" id="rFront"> Må sitte fremst</label>
@@ -422,10 +439,62 @@ var DEFAULT_NAMES=[
   "Patricija","Ella","Agnes","Lykke","Birk","Johan","Julia","Dilsha","Sara","Hedda",
   "Eliah","Sebastian","Liam","Trygve","Ludvik","Håkon A","Alexander","Håkon K","Mathea","Filip"
 ];
-var AUTO_KEY="klassekart_autosave_v9";
+
+var TRADITIONAL_GENDER_BY_NAME={
+  "Johannes":"boy",
+  "Jesper":"boy",
+  "Rosanna":"girl",
+  "Zoe":"girl",
+  "Malin":"girl",
+  "Ingrid":"girl",
+  "Erica":"girl",
+  "Emine":"girl",
+  "Marie":"girl",
+  "Ronja":"girl",
+  "Patricija":"girl",
+  "Ella":"girl",
+  "Agnes":"girl",
+  "Lykke":"girl",
+  "Birk":"boy",
+  "Johan":"boy",
+  "Julia":"girl",
+  "Dilsha":"girl",
+  "Sara":"girl",
+  "Hedda":"girl",
+  "Eliah":"boy",
+  "Sebastian":"boy",
+  "Liam":"boy",
+  "Trygve":"boy",
+  "Ludvik":"boy",
+  "Håkon A":"boy",
+  "Alexander":"boy",
+  "Håkon K":"boy",
+  "Mathea":"girl",
+  "Filip":"boy"
+};
+
+function traditionalGenderForName(name){
+  var key=String(name||"").trim();
+  if(TRADITIONAL_GENDER_BY_NAME[key])return TRADITIONAL_GENDER_BY_NAME[key];
+
+  // Also recognise the base name when the class uses an initial, e.g. Håkon A.
+  var first=key.split(/\s+/)[0];
+  var base={
+    "Johannes":"boy","Jesper":"boy","Birk":"boy","Johan":"boy","Eliah":"boy",
+    "Sebastian":"boy","Liam":"boy","Trygve":"boy","Ludvik":"boy","Håkon":"boy",
+    "Alexander":"boy","Filip":"boy",
+    "Rosanna":"girl","Zoe":"girl","Malin":"girl","Ingrid":"girl","Erica":"girl",
+    "Emine":"girl","Marie":"girl","Ronja":"girl","Patricija":"girl","Ella":"girl",
+    "Agnes":"girl","Lykke":"girl","Julia":"girl","Dilsha":"girl","Sara":"girl",
+    "Hedda":"girl","Mathea":"girl"
+  };
+  return base[first]||"";
+}
+
+var AUTO_KEY="klassekart_autosave_v10";
 
 var state={
-  students:DEFAULT_NAMES.map(function(name){return{id:uid(),name:name,gender:""}}),
+  students:DEFAULT_NAMES.map(function(name){return{id:uid(),name:name,gender:traditionalGenderForName(name)}}),
   seats:Array(30).fill(null),
   rules:{},
   locked:[],
@@ -442,7 +511,10 @@ var state={
   var saved=safeGet(AUTO_KEY,null);
   if(!saved || !Array.isArray(saved.students) || !Array.isArray(saved.seats))return;
   state.students=clone(saved.students);
-  state.students.forEach(function(s){if(typeof s.gender!=="string")s.gender=""});
+  state.students.forEach(function(s){
+    if(typeof s.gender!=="string")s.gender="";
+    if(!s.gender)s.gender=traditionalGenderForName(s.name);
+  });
   state.seats=saved.seats.slice(0,30);while(state.seats.length<30)state.seats.push(null);
   state.rules=clone(saved.rules||{});
   state.locked=(saved.locked||[]).slice();
@@ -562,7 +634,10 @@ function restore(s){
   state.students=clone(s.students||[]);
   state.seats=(s.seats||[]).slice(0,30);while(state.seats.length<30)state.seats.push(null);
   state.rules=clone(s.rules||{});
-  state.students.forEach(function(st){if(typeof st.gender!=="string")st.gender=""});
+  state.students.forEach(function(st){
+    if(typeof st.gender!=="string")st.gender="";
+    if(!st.gender)st.gender=traditionalGenderForName(st.name);
+  });
   Object.keys(state.rules).forEach(function(id){
     var rr=state.rules[id];
     if(rr.notBeside && !Array.isArray(rr.notBeside)) rr.notBeside=[rr.notBeside];
@@ -607,7 +682,7 @@ function renderSeats(){
   for(var i=0;i<30;i++){
     var seat=document.createElement("div"),id=state.seats[i],p=pos[i];
     seat.className="seat"+(state.selectedSeat===i?" selected":"")+(id&&isLocked(id)?" locked":"");
-    if(state.visualRuleStudent) seat.className+=allowedBasic(state.visualRuleStudent,i,state.seats)?" valid":" invalid";
+    if(state.visualRuleStudent) seat.className+=possibleSeatForStudent(state.visualRuleStudent,i)?" valid":" invalid";
     seat.dataset.seat=i;seat.style.left=p.x+"%";seat.style.top=p.y+"%";seat.style.transform="translate(-50%,-50%) rotate("+(p.rot||0)+"deg)";
     var content="";
     if(state.view==="name"){
@@ -629,6 +704,16 @@ function renderSeats(){
     inp.addEventListener("change",function(){setSeatName(Number(this.dataset.seatInput),this.value)});
     inp.addEventListener("focus",function(){state.selectedSeat=Number(this.dataset.seatInput);renderSeatSelect()});
   });
+
+  var oldLegend=gid("possibleLegend");
+  if(oldLegend)oldLegend.remove();
+  if(state.visualRuleStudent){
+    var legend=document.createElement("div");
+    legend.id="possibleLegend";
+    legend.className="possible-legend";
+    legend.innerHTML='<span class="ok">● Grønn = mulig</span>&nbsp;&nbsp; <span class="no">● Rød = ikke mulig</span>';
+    host.parentNode.appendChild(legend);
+  }
 }
 function renderSeatSelect(){
   var sel=gid("seatStudentSelect");sel.innerHTML='<option value="">– Tom plass –</option>';
@@ -709,11 +794,11 @@ function setSeatName(i,value){
   }
   var same=state.students.find(function(s){return s.name.toLowerCase()===name.toLowerCase()});
   if(same){assignStudent(same.id,i,true);return}
-  commit();var ns={id:uid(),name:name,gender:""};state.students.push(ns);state.seats[i]=ns.id;renderAll();
+  commit();var ns={id:uid(),name:name,gender:traditionalGenderForName(name)};state.students.push(ns);state.seats[i]=ns.id;renderAll();
 }
 function addStudent(){
   var inp=gid("newStudent"),name=inp.value.trim();if(!name)return;
-  commit();state.students.push({id:uid(),name:name,gender:""});inp.value="";renderAll();
+  commit();state.students.push({id:uid(),name:name,gender:traditionalGenderForName(name)});inp.value="";renderAll();
 }
 function renameStudent(id){
   var s=studentById(id);if(!s)return;
@@ -774,6 +859,56 @@ function pairCompatible(a,b){
   if(mustB.length && mustB.indexOf(a)===-1)return false;
   return true;
 }
+function possibleSeatForStudent(studentId,seatIndex){
+  // Visualisation is about whether THIS desk could work after a reshuffle,
+  // not whether it happens to be empty right now.
+  if(!locationAllowed(studentId,seatIndex))return false;
+
+  var candidate=state.seats.slice();
+  var old=candidate.indexOf(studentId);
+  if(old!==-1)candidate[old]=null;
+
+  // Ignore whoever currently occupies the desk itself; they could be moved.
+  candidate[seatIndex]=studentId;
+
+  var mate=pairMate(seatIndex);
+  var mateId=candidate[mate];
+
+  if(frontBackConflict(studentId,seatIndex,candidate))return false;
+  if(mateId && !pairCompatible(studentId,mateId))return false;
+
+  var required=arrRule((state.rules[studentId]||{}).mustSitWith);
+  if(required.length){
+    if(mateId){
+      if(required.indexOf(mateId)===-1)return false;
+    }else{
+      // Empty mate is valid if at least one approved alternative could
+      // theoretically occupy it.
+      var possibleCompanion=required.some(function(companionId){
+        if(!studentById(companionId))return false;
+        if(!locationAllowed(companionId,mate))return false;
+
+        var temp=candidate.slice();
+        var companionOld=temp.indexOf(companionId);
+        if(companionOld!==-1)temp[companionOld]=null;
+        temp[mate]=companionId;
+
+        return pairCompatible(studentId,companionId) &&
+               !frontBackConflict(companionId,mate,temp);
+      });
+      if(!possibleCompanion)return false;
+    }
+  }
+
+  // Respect a current neighbour's own hard "must sit with" rule as well.
+  if(mateId){
+    var mateRequired=arrRule((state.rules[mateId]||{}).mustSitWith);
+    if(mateRequired.length && mateRequired.indexOf(studentId)===-1)return false;
+  }
+
+  return true;
+}
+
 function frontBackConflict(studentId,seatIndex,candidate){
   var r=state.rules[studentId]||{};
   if(r.notFrontBack){
@@ -1121,6 +1256,7 @@ function saveRules(showPossible){
   state.visualRuleStudent=showPossible?editingRuleStudent:null;
   gid("rulesModal").classList.add("hidden");
   renderAll();
+  if(showPossible)showToast("Grønne pulter er mulige for "+studentName(editingRuleStudent)+". Røde pulter bryter en restriksjon.");
 }
 function clearRules(){
   if(!editingRuleStudent)return;commit();delete state.rules[editingRuleStudent];state.visualRuleStudent=null;gid("rulesModal").classList.add("hidden");renderAll();
@@ -1164,13 +1300,13 @@ function downloadFile(filename,content,type){
 function saveCurrent(){
   var data={
     app:"Klassekart",
-    version:9,
+    version:10,
     savedAt:new Date().toISOString(),
     data:snapshotState(),
     snapshots:snapshots
   };
   // Keep a browser-local copy when the environment permits it.
-  safeSet("klassekart_current_v9",data);
+  safeSet("klassekart_current_v10",data);
   var stamp=new Date().toISOString().slice(0,10);
   downloadFile("klassekart-"+stamp+".json",JSON.stringify(data,null,2),"application/json");
   showToast("Klassekartet er lagret som en fil.");
@@ -1295,7 +1431,7 @@ function addSnapshot(){
 function applyImport(){
   var names=gid("importText").value.split(/\r?\n/).map(function(x){return x.trim()}).filter(Boolean);
   if(!names.length){alert("Lim inn minst ett elevnavn.");return}
-  commit();state.students=names.map(function(n){return{id:uid(),name:n,gender:""}});
+  commit();state.students=names.map(function(n){return{id:uid(),name:n,gender:traditionalGenderForName(n)}});
   state.seats=Array(30).fill(null);state.rules={};state.locked=[];state.previousSeats=null;state.visualRuleStudent=null;
   gid("importModal").classList.add("hidden");renderAll();
 }
@@ -1318,7 +1454,7 @@ function bind(){
   gid("resetClassBtn").addEventListener("click",function(){
     if(!confirm("Gjenopprette den faste listen med 30 elever? Nåværende plassering og restriksjoner blir nullstilt."))return;
     commit();
-    state.students=DEFAULT_NAMES.map(function(name){return{id:uid(),name:name,gender:""}});
+    state.students=DEFAULT_NAMES.map(function(name){return{id:uid(),name:name,gender:traditionalGenderForName(name)}});
     state.seats=Array(30).fill(null);
     state.rules={};
     state.locked=[];
