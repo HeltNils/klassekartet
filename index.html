@@ -236,7 +236,7 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
   display:grid;place-items:center;line-height:1;cursor:pointer;
 }
 .music-stop:hover{background:#e2eaf2;color:#10294b}
-@media print{.music-pill,#changesBowieAudio,#changesTupacAudio,#everybodyChangingAudio{display:none!important}}
+@media print{.music-pill,#changesBowieAudio,#changesTupacAudio,#everybodyChangingAudio,#changeIsGonnaComeAudio{display:none!important}}
 
 </style>
 </head>
@@ -366,6 +366,7 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
 <audio id="changesBowieAudio" preload="auto" src="https://audio-ssl.itunes.apple.com/apple-assets-us-std-000001/AudioPreview62/v4/b4/79/b6/b479b69f-bbd1-7c71-8bd4-b5c93c81a336/mzaf_5086195590067603405.plus.aac.p.m4a"></audio>
 <video id="changesTupacAudio" preload="auto" playsinline style="display:none" src="https://video-ssl.itunes.apple.com/apple-assets-us-std-000001/Video125/v4/cf/57/f5/cf57f526-7047-ccfe-aab9-d40fa909d3a5/mzvf_5424212395291725221.640x464.h264lc.U.p.m4v"></video>
 <audio id="everybodyChangingAudio" preload="auto"></audio>
+<audio id="changeIsGonnaComeAudio" preload="auto"></audio>
 <div id="musicPlayer" class="music-pill hidden" aria-live="polite">
   <span class="music-dot">♪</span>
   <span class="music-label" id="musicLabel">Changes</span>
@@ -537,7 +538,7 @@ function traditionalGenderForName(name){
   return base[first]||"";
 }
 
-var AUTO_KEY="klassekart_autosave_v14";
+var AUTO_KEY="klassekart_autosave_v15";
 
 var state={
   students:DEFAULT_NAMES.map(function(name){return{id:uid(),name:name,gender:traditionalGenderForName(name)}}),
@@ -1295,6 +1296,7 @@ function placeOppositeGenderAsFarAsPossible(){
 
 var activeChangesPlayer=null;
 var keanePreviewReady=false;
+var samCookePreviewReady=false;
 
 function resetChangesPlayer(player){
   if(!player)return;
@@ -1333,10 +1335,39 @@ function initKeanePreview(){
   document.head.appendChild(script);
 }
 
+function initSamCookePreview(){
+  // Resolve Apple's current preview URL for Sam Cooke's
+  // "A Change Is Gonna Come" at runtime.
+  window.__handleSamCookePreview=function(payload){
+    try{
+      var results=(payload&&payload.results)||[];
+      var track=results.find(function(item){
+        return item &&
+          String(item.artistName||"").toLowerCase().indexOf("sam cooke")!==-1 &&
+          String(item.trackName||"").toLowerCase().indexOf("a change is gonna come")!==-1 &&
+          item.previewUrl;
+      });
+      if(track){
+        var audio=gid("changeIsGonnaComeAudio");
+        audio.src=track.previewUrl;
+        audio.load();
+        samCookePreviewReady=true;
+      }
+    }catch(e){}
+  };
+
+  var script=document.createElement("script");
+  script.src="https://itunes.apple.com/lookup?id=1440762757&callback=__handleSamCookePreview";
+  script.async=true;
+  script.onerror=function(){samCookePreviewReady=false};
+  document.head.appendChild(script);
+}
+
 function playChanges(){
   var bowie=gid("changesBowieAudio");
   var tupac=gid("changesTupacAudio");
   var keane=gid("everybodyChangingAudio");
+  var samCooke=gid("changeIsGonnaComeAudio");
   var pill=gid("musicPlayer");
   var label=gid("musicLabel");
   if(!bowie || !tupac)return;
@@ -1344,6 +1375,7 @@ function playChanges(){
   resetChangesPlayer(bowie);
   resetChangesPlayer(tupac);
   resetChangesPlayer(keane);
+  resetChangesPlayer(samCooke);
 
   var choices=[
     {player:bowie,label:"Changes – David Bowie"},
@@ -1352,6 +1384,10 @@ function playChanges(){
 
   if(keanePreviewReady && keane && keane.src){
     choices.push({player:keane,label:"Everybody's Changing – Keane"});
+  }
+
+  if(samCookePreviewReady && samCooke && samCooke.src){
+    choices.push({player:samCooke,label:"A Change Is Gonna Come – Sam Cooke"});
   }
 
   var choice=choices[Math.floor(Math.random()*choices.length)];
@@ -1376,6 +1412,7 @@ function stopChanges(){
   resetChangesPlayer(gid("changesBowieAudio"));
   resetChangesPlayer(gid("changesTupacAudio"));
   resetChangesPlayer(gid("everybodyChangingAudio"));
+  resetChangesPlayer(gid("changeIsGonnaComeAudio"));
   activeChangesPlayer=null;
   var pill=gid("musicPlayer");
   if(pill)pill.classList.add("hidden");
@@ -1521,13 +1558,13 @@ function downloadFile(filename,content,type){
 function saveCurrent(){
   var data={
     app:"Klassekart",
-    version:14,
+    version:15,
     savedAt:new Date().toISOString(),
     data:snapshotState(),
     snapshots:snapshots
   };
   // Keep a browser-local copy when the environment permits it.
-  safeSet("klassekart_current_v14",data);
+  safeSet("klassekart_current_v15",data);
   var stamp=new Date().toISOString().slice(0,10);
   downloadFile("klassekart-"+stamp+".json",JSON.stringify(data,null,2),"application/json");
   showToast("Klassekartet er lagret som en fil.");
@@ -1661,7 +1698,7 @@ function bind(){
   gid("randomBtn").addEventListener("click",function(){randomize(false)});
   gid("smartBtn").addEventListener("click",function(){randomize(true)});
   gid("stopMusicBtn").addEventListener("click",stopChanges);
-  ["changesBowieAudio","changesTupacAudio","everybodyChangingAudio"].forEach(function(id){
+  ["changesBowieAudio","changesTupacAudio","everybodyChangingAudio","changeIsGonnaComeAudio"].forEach(function(id){
     gid(id).addEventListener("ended",function(){
       if(activeChangesPlayer===this){
         gid("musicPlayer").classList.add("hidden");
@@ -1758,6 +1795,7 @@ function bind(){
 document.querySelector(".right").dataset.activeTab="placement";
 bind();
 initKeanePreview();
+initSamCookePreview();
 renderAll();
 })();
 </script>
