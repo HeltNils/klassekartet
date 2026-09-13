@@ -182,6 +182,17 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
   .music-player{display:none!important}
 }
 
+
+.gender-badge{
+  display:inline-grid;place-items:center;
+  min-width:18px;height:18px;padding:0 4px;
+  margin-left:5px;border-radius:999px;
+  background:#e9f2fb;color:#315a84;
+  font-size:10px;font-weight:900;vertical-align:1px
+}
+.gender-mode-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.genderModeBtn.active{background:#edf6ff;border-color:#76ace2;color:#0c67b8;font-weight:800}
+
 </style>
 </head>
 <body>
@@ -204,8 +215,10 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
 <aside class="left">
   <div class="section-head"><h2>Elever (<span id="studentCount">30</span>)</h2><button class="btn small" id="sortBtn">A–Å</button></div>
   <input class="search" id="searchInput" placeholder="Søk etter elev">
+  <div class="help" style="margin:7px 0 9px">Elevprofiler og restriksjoner lagres automatisk i denne nettleseren.</div>
   <div class="student-list" id="studentList"></div>
   <div class="add-row"><input id="newStudent" class="input" placeholder="Nytt elevnavn"><button class="btn success" id="addStudentBtn">+ Legg til</button></div>
+  <button class="btn small" id="resetClassBtn" style="width:100%;margin-top:7px">↺ Gjenopprett den faste 30-elevslisten</button>
 </aside>
 
 <main class="main">
@@ -257,6 +270,17 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
       <button class="btn" style="width:100%" id="layoutBtn">▦ Alternative sittemåter</button>
       <div class="status" id="layoutStatus">Aktivt oppsett: Tre rekker</div>
     </div>
+
+    <div class="panel-section">
+      <h3>Parfordeling</h3>
+      <div class="gender-mode-row">
+        <button class="btn genderModeBtn" data-gender-mode="mixed">Gutt–jente</button>
+        <button class="btn genderModeBtn" data-gender-mode="mixedfree">Blandet</button>
+        <button class="btn genderModeBtn" data-gender-mode="same">Jente–jente<br>gutt–gutt</button>
+      </div>
+      <div class="help">Dette er en sterk preferanse, ikke en hard restriksjon. Elever uten satt kjønn plasseres fritt, så funksjonen låser aldri hele plasseringen.</div>
+    </div>
+
     <div class="panel-section">
       <h3>Tilfeldig plassering</h3>
       <label class="check"><input type="checkbox" id="keepPlaced"> Behold allerede plasserte elever</label>
@@ -326,6 +350,15 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
 <div class="modal-backdrop hidden" id="rulesModal">
   <div class="modal">
     <div class="modal-head"><div><h2 id="rulesTitle">Restriksjoner</h2><p>Alle regler er valgfrie. Du kan velge flere alternativer både for «Ikke sitte ved siden av» og «Må sitte med».</p></div><button class="icon" data-close="rulesModal">×</button></div>
+    <div class="panel-section" style="margin-top:0;padding-top:0;border-top:0">
+      <label><strong>Kjønn for parfordeling</strong></label>
+      <select class="input" id="rGender" style="margin-top:6px">
+        <option value="">Ikke satt</option>
+        <option value="boy">Gutt</option>
+        <option value="girl">Jente</option>
+      </select>
+      <div class="help">Dette brukes bare av knappene for gutt/jente-fordeling. Ingenting blir gjettet fra elevens navn.</div>
+    </div>
     <div class="checkgrid">
       <label class="check"><input type="checkbox" id="rFront"> Må sitte fremst</label>
       <label class="check"><input type="checkbox" id="rBack"> Må sitte bakerst</label>
@@ -384,18 +417,48 @@ function esc(s){
 function safeGet(key,fallback){try{var v=localStorage.getItem(key);return v?JSON.parse(v):fallback}catch(e){return fallback}}
 function safeSet(key,value){try{localStorage.setItem(key,JSON.stringify(value));return true}catch(e){return false}}
 
+var DEFAULT_NAMES=[
+  "Johannes","Jesper","Rosanna","Zoe","Malin","Ingrid","Erica","Emine","Marie","Ronja",
+  "Patricija","Ella","Agnes","Lykke","Birk","Johan","Julia","Dilsha","Sara","Hedda",
+  "Eliah","Sebastian","Liam","Trygve","Ludvik","Håkon A","Alexander","Håkon K","Mathea","Filip"
+];
+var AUTO_KEY="klassekart_autosave_v9";
+
 var state={
-  students:Array.from({length:30},function(_,i){return{id:uid(),name:"Elev "+(i+1)}}),
+  students:DEFAULT_NAMES.map(function(name){return{id:uid(),name:name,gender:""}}),
   seats:Array(30).fill(null),
   rules:{},
   locked:[],
   layout:"rows",
   view:"name",
+  pairGenderMode:"mixedfree",
   previousSeats:null,
   selectedSeat:null,
   swapFirst:null,
   visualRuleStudent:null
 };
+
+(function loadAutoSavedProfiles(){
+  var saved=safeGet(AUTO_KEY,null);
+  if(!saved || !Array.isArray(saved.students) || !Array.isArray(saved.seats))return;
+  state.students=clone(saved.students);
+  state.students.forEach(function(s){if(typeof s.gender!=="string")s.gender=""});
+  state.seats=saved.seats.slice(0,30);while(state.seats.length<30)state.seats.push(null);
+  state.rules=clone(saved.rules||{});
+  state.locked=(saved.locked||[]).slice();
+  state.layout=saved.layout||"rows";
+  state.view=saved.view||"name";
+  state.pairGenderMode=saved.pairGenderMode||"mixedfree";
+  state.previousSeats=saved.previousSeats||null;
+
+  Object.keys(state.rules).forEach(function(id){
+    var rr=state.rules[id]||{};
+    if(rr.notBeside && !Array.isArray(rr.notBeside))rr.notBeside=[rr.notBeside];
+    if(!rr.notBeside)rr.notBeside=[];
+    if(rr.mustSitWith && !Array.isArray(rr.mustSitWith))rr.mustSitWith=[rr.mustSitWith];
+    if(!rr.mustSitWith)rr.mustSitWith=[];
+  });
+})();
 var undoStack=[],redoStack=[],snapshots=safeGet("klassekart_snapshots_v3",[]);
 var editingRuleStudent=null;
 
@@ -481,12 +544,25 @@ function ruleHasAny(r){
 }
 
 function snapshotState(){
-  return clone({students:state.students,seats:state.seats,rules:state.rules,locked:state.locked,layout:state.layout,view:state.view,previousSeats:state.previousSeats});
+  return clone({
+    students:state.students,
+    seats:state.seats,
+    rules:state.rules,
+    locked:state.locked,
+    layout:state.layout,
+    view:state.view,
+    pairGenderMode:state.pairGenderMode,
+    previousSeats:state.previousSeats
+  });
+}
+function autoSave(){
+  safeSet(AUTO_KEY,snapshotState());
 }
 function restore(s){
   state.students=clone(s.students||[]);
   state.seats=(s.seats||[]).slice(0,30);while(state.seats.length<30)state.seats.push(null);
   state.rules=clone(s.rules||{});
+  state.students.forEach(function(st){if(typeof st.gender!=="string")st.gender=""});
   Object.keys(state.rules).forEach(function(id){
     var rr=state.rules[id];
     if(rr.notBeside && !Array.isArray(rr.notBeside)) rr.notBeside=[rr.notBeside];
@@ -495,7 +571,7 @@ function restore(s){
     if(!rr.mustSitWith) rr.mustSitWith=[];
   });
   state.locked=(s.locked||[]).slice();
-  state.layout=s.layout||"rows";state.view=s.view||"name";state.previousSeats=s.previousSeats||null;
+  state.layout=s.layout||"rows";state.view=s.view||"name";state.pairGenderMode=s.pairGenderMode||"mixedfree";state.previousSeats=s.previousSeats||null;
   state.selectedSeat=null;state.swapFirst=null;state.visualRuleStudent=null;
   renderAll();
 }
@@ -514,7 +590,8 @@ function renderStudents(){
   state.students.filter(function(s){return s.name.toLowerCase().indexOf(q)!==-1}).forEach(function(s){
     var idx=state.students.indexOf(s),row=document.createElement("div");
     row.className="student"+(used[s.id]?" used":"");row.dataset.id=s.id;
-    row.innerHTML='<div class="student-drag" draggable="true"><span class="student-num">'+(idx+1)+'</span><span class="student-name">'+esc(s.name)+'</span></div>'+
+    var genderBadge=s.gender==="boy"?' <span class="gender-badge">G</span>':(s.gender==="girl"?' <span class="gender-badge">J</span>':'');
+    row.innerHTML='<div class="student-drag" draggable="true"><span class="student-num">'+(idx+1)+'</span><span class="student-name">'+esc(s.name)+genderBadge+'</span></div>'+
       '<div class="student-actions"><button class="icon lockBtn" title="Lås/åpne">'+(isLocked(s.id)?"🔒":"🔓")+'</button>'+
       '<button class="icon rulesBtn" title="Restriksjoner">⋯</button><button class="icon editBtn" title="Endre navn">✎</button>'+
       '<button class="icon delete deleteBtn" title="Fjern elev">×</button></div>';
@@ -601,9 +678,12 @@ function renderHistory(){
 }
 function renderViewButtons(){
   document.querySelectorAll(".viewBtn").forEach(function(b){b.classList.toggle("active",b.dataset.view===state.view)});
+  document.querySelectorAll(".genderModeBtn").forEach(function(b){
+    b.classList.toggle("active",b.dataset.genderMode===state.pairGenderMode);
+  });
   gid("layoutStatus").textContent="Aktivt oppsett: "+layouts[state.layout].title;
 }
-function renderAll(){renderStudents();renderSeats();renderSeatSelect();renderRulesOverview();renderHistory();renderViewButtons();updateUndo()}
+function renderAll(){renderStudents();renderSeats();renderSeatSelect();renderRulesOverview();renderHistory();renderViewButtons();updateUndo();autoSave()}
 
 function selectSeat(i){
   state.visualRuleStudent=null;
@@ -629,11 +709,11 @@ function setSeatName(i,value){
   }
   var same=state.students.find(function(s){return s.name.toLowerCase()===name.toLowerCase()});
   if(same){assignStudent(same.id,i,true);return}
-  commit();var ns={id:uid(),name:name};state.students.push(ns);state.seats[i]=ns.id;renderAll();
+  commit();var ns={id:uid(),name:name,gender:""};state.students.push(ns);state.seats[i]=ns.id;renderAll();
 }
 function addStudent(){
   var inp=gid("newStudent"),name=inp.value.trim();if(!name)return;
-  commit();state.students.push({id:uid(),name:name});inp.value="";renderAll();
+  commit();state.students.push({id:uid(),name:name,gender:""});inp.value="";renderAll();
 }
 function renameStudent(id){
   var s=studentById(id);if(!s)return;
@@ -667,120 +747,274 @@ function toggleLock(id){
   commit();if(isLocked(id))state.locked=state.locked.filter(function(x){return x!==id});else state.locked.push(id);renderAll();
 }
 
-function allowedBasic(studentId,seatIndex,candidate){
+function arrRule(v){
+  if(Array.isArray(v))return v.filter(Boolean);
+  return v?[v]:[];
+}
+function locationAllowed(studentId,seatIndex){
   var r=state.rules[studentId]||{},m=meta(seatIndex);
-  if(r.front && m.y>=30)return false;if(r.back && m.y<=72)return false;
-  if(r.wall && m.x<=64)return false;if(r.noWall && m.x>64)return false;
-  if(r.window && m.x>=36)return false;if(r.noWindow && m.x<36)return false;
+  if(r.front && m.y>=30)return false;
+  if(r.back && m.y<=72)return false;
+  if(r.wall && m.x<=64)return false;
+  if(r.noWall && m.x>64)return false;
+  if(r.window && m.x>=36)return false;
+  if(r.noWindow && m.x<36)return false;
   if(r.middle && !(m.x>=36&&m.x<=64))return false;
-  var mate=pairMate(seatIndex);
-  if(r.notBeside){
-    var blocked=Array.isArray(r.notBeside)?r.notBeside:[r.notBeside];
-    if(blocked.indexOf(candidate[mate])!==-1)return false;
+  return true;
+}
+function pairCompatible(a,b){
+  if(!a||!b)return true;
+  var ra=state.rules[a]||{},rb=state.rules[b]||{};
+  if(arrRule(ra.notBeside).indexOf(b)!==-1)return false;
+  if(arrRule(rb.notBeside).indexOf(a)!==-1)return false;
+
+  var mustA=arrRule(ra.mustSitWith);
+  var mustB=arrRule(rb.mustSitWith);
+  if(mustA.length && mustA.indexOf(b)===-1)return false;
+  if(mustB.length && mustB.indexOf(a)===-1)return false;
+  return true;
+}
+function frontBackConflict(studentId,seatIndex,candidate){
+  var r=state.rules[studentId]||{};
+  if(r.notFrontBack){
+    var target=candidate.indexOf(r.notFrontBack);
+    if(target!==-1){
+      var a=meta(seatIndex),b=meta(target);
+      if(Math.abs(a.x-b.x)<7 && Math.abs(a.y-b.y)<24)return true;
+    }
+  }
+  for(var j=0;j<candidate.length;j++){
+    var other=candidate[j];
+    if(!other||other===studentId)continue;
+    var or=state.rules[other]||{};
+    if(or.notFrontBack===studentId){
+      var x=meta(seatIndex),y=meta(j);
+      if(Math.abs(x.x-y.x)<7 && Math.abs(x.y-y.y)<24)return true;
+    }
+  }
+  return false;
+}
+function allowedPartial(studentId,seatIndex,candidate,selectedIds){
+  if(candidate[seatIndex])return false;
+  if(!locationAllowed(studentId,seatIndex))return false;
+  if(frontBackConflict(studentId,seatIndex,candidate))return false;
+
+  var mate=pairMate(seatIndex),mateId=candidate[mate];
+  if(mateId && !pairCompatible(studentId,mateId))return false;
+
+  var r=state.rules[studentId]||{},required=arrRule(r.mustSitWith);
+  if(required.length){
+    if(mateId){
+      if(required.indexOf(mateId)===-1)return false;
+    }else{
+      var possible=required.some(function(companionId){
+        if(selectedIds.indexOf(companionId)===-1)return false;
+        var existing=candidate.indexOf(companionId);
+        if(existing!==-1)return existing===mate;
+        return locationAllowed(companionId,mate) &&
+               !frontBackConflict(companionId,mate,candidate) &&
+               pairCompatible(studentId,companionId);
+      });
+      if(!possible)return false;
+    }
   }
 
-  // Hvis eleven selv har «Må sitte med», kan en allerede opptatt nabopult
-  // bare være en av de godkjente alternativene. Tom nabopult er foreløpig OK.
-  if(r.mustSitWith){
-    var required=Array.isArray(r.mustSitWith)?r.mustSitWith:[r.mustSitWith];
-    if(candidate[mate] && required.indexOf(candidate[mate])===-1)return false;
+  // If the person already sitting at the mate requires a specific companion,
+  // this student must be one of the allowed options.
+  if(mateId){
+    var mateReq=arrRule((state.rules[mateId]||{}).mustSitWith);
+    if(mateReq.length && mateReq.indexOf(studentId)===-1)return false;
   }
+  return true;
+}
+function requirementsStillFeasible(candidate,selectedIds){
+  for(var i=0;i<candidate.length;i++){
+    var id=candidate[i];if(!id)continue;
+    if(!locationAllowed(id,i))return false;
+    if(frontBackConflict(id,i,candidate))return false;
 
-  // Hvis eleven ved nabopulten har «Må sitte med», må denne eleven være
-  // et gyldig alternativ for naboen. Dette hindrer at paret fylles feil.
-  if(candidate[mate]){
-    var mateRule=state.rules[candidate[mate]]||{};
-    if(mateRule.mustSitWith){
-      var mateRequired=Array.isArray(mateRule.mustSitWith)?mateRule.mustSitWith:[mateRule.mustSitWith];
-      if(mateRequired.length && mateRequired.indexOf(studentId)===-1)return false;
+    var mate=pairMate(i),mateId=candidate[mate];
+    if(mateId && !pairCompatible(id,mateId))return false;
+
+    var req=arrRule((state.rules[id]||{}).mustSitWith);
+    if(req.length){
+      if(mateId){
+        if(req.indexOf(mateId)===-1)return false;
+      }else{
+        var possible=req.some(function(companionId){
+          if(selectedIds.indexOf(companionId)===-1)return false;
+          var existing=candidate.indexOf(companionId);
+          if(existing!==-1)return false; // already placed elsewhere
+          return locationAllowed(companionId,mate) &&
+                 !frontBackConflict(companionId,mate,candidate) &&
+                 pairCompatible(id,companionId);
+        });
+        if(!possible)return false;
+      }
     }
   }
   return true;
 }
 function finalValid(candidate){
-  for(var i=0;i<30;i++){
+  for(var i=0;i<candidate.length;i++){
     var id=candidate[i];if(!id)continue;
-    if(!allowedBasic(id,i,candidate))return false;
-    var r=state.rules[id]||{};
-    if(r.notFrontBack){
-      var j=candidate.indexOf(r.notFrontBack);
-      if(j!==-1){var a=meta(i),b=meta(j);if(Math.abs(a.x-b.x)<7 && Math.abs(a.y-b.y)<24)return false}
-    }
-    if(r.mustSitWith){
-      var required=Array.isArray(r.mustSitWith)?r.mustSitWith:[r.mustSitWith];
-      var mateId=candidate[pairMate(i)];
-      if(required.length && required.indexOf(mateId)===-1)return false;
-    }
+    if(!locationAllowed(id,i))return false;
+    if(frontBackConflict(id,i,candidate))return false;
+    var mateId=candidate[pairMate(i)];
+    if(mateId && !pairCompatible(id,mateId))return false;
+
+    var req=arrRule((state.rules[id]||{}).mustSitWith);
+    if(req.length && req.indexOf(mateId)===-1)return false;
   }
   return true;
 }
-function candidateScore(cand,smart){
+function genderPairScore(cand){
+  if(state.pairGenderMode==="mixedfree")return 0;
   var score=0;
+  for(var i=0;i<30;i+=2){
+    var a=studentById(cand[i]),b=studentById(cand[i+1]);
+    if(!a||!b||!a.gender||!b.gender)continue;
+    var same=a.gender===b.gender;
+    if(state.pairGenderMode==="mixed")score+=same?-8:18;
+    if(state.pairGenderMode==="same")score+=same?18:-8;
+  }
+  return score;
+}
+function candidateScore(cand,smart){
+  var score=genderPairScore(cand);
   cand.forEach(function(id,i){
     if(!id)return;
     var r=state.rules[id]||{},mate=pairMate(i);
     if(r.preferBeside && cand[mate]===r.preferBeside)score+=15;
-    if(r.mustSitWith){
-      var req=Array.isArray(r.mustSitWith)?r.mustSitWith:[r.mustSitWith];
-      if(req.indexOf(cand[mate])!==-1)score+=25;
-    }
     if(smart && state.previousSeats){
       var old=state.previousSeats.indexOf(id);
       if(old!==-1){
         if(old!==i)score+=4;
-        var a=meta(i),b=meta(old);if(a.x!==b.x)score+=2;if(a.y!==b.y)score+=2;if(pairMate(old)!==i)score+=2;
+        var a=meta(i),b=meta(old);
+        if(a.x!==b.x)score+=2;
+        if(a.y!==b.y)score+=2;
+        if(pairMate(old)!==i)score+=2;
       }
     }
   });
   return score+Math.random();
 }
-function makeCandidate(smart){
+function choiceScore(id,seat,cand,smart){
+  var score=Math.random()*2;
+  var mateId=cand[pairMate(seat)];
+  var r=state.rules[id]||{};
+  if(r.preferBeside && mateId===r.preferBeside)score+=25;
+
+  if(mateId && state.pairGenderMode!=="mixedfree"){
+    var a=studentById(id),b=studentById(mateId);
+    if(a&&b&&a.gender&&b.gender){
+      var same=a.gender===b.gender;
+      if(state.pairGenderMode==="mixed")score+=same?-4:10;
+      if(state.pairGenderMode==="same")score+=same?10:-4;
+    }
+  }
+  if(smart && state.previousSeats){
+    var old=state.previousSeats.indexOf(id);
+    if(old!==-1){
+      if(old!==seat)score+=4;
+      var n=meta(seat),o=meta(old);
+      if(n.x!==o.x)score+=2;
+      if(n.y!==o.y)score+=2;
+    }
+  }
+  return score;
+}
+function solveOneCandidate(smart){
   var fixed={},fixedIds={};
   state.seats.forEach(function(id,i){
-    if(id && (isLocked(id)||gid("keepPlaced").checked)){fixed[i]=id;fixedIds[id]=1}
+    if(id && (isLocked(id)||gid("keepPlaced").checked)){
+      fixed[i]=id;fixedIds[id]=1;
+    }
   });
-  var ids=state.students.map(function(s){return s.id}).filter(function(id){return !fixedIds[id]}).slice(0,30-Object.keys(fixed).length);
-  ids.sort(function(a,b){return Object.keys(state.rules[b]||{}).length-Object.keys(state.rules[a]||{}).length});
+
+  // Keep locked/fixed students, then fill available seats with the remaining
+  // students. The app supports more than 30 profiles, but only 30 desks.
+  var selectedIds=[];
+  Object.keys(fixed).forEach(function(i){
+    var id=fixed[i];
+    if(selectedIds.indexOf(id)===-1)selectedIds.push(id);
+  });
+  state.students.forEach(function(s){
+    if(selectedIds.length<30 && selectedIds.indexOf(s.id)===-1)selectedIds.push(s.id);
+  });
+
+  var cand=Array(30).fill(null);
+  Object.keys(fixed).forEach(function(i){
+    if(selectedIds.indexOf(fixed[i])!==-1)cand[Number(i)]=fixed[i];
+  });
+
+  // Validate fixed placements against hard restrictions.
+  for(var fi=0;fi<30;fi++){
+    if(!cand[fi])continue;
+    if(!locationAllowed(cand[fi],fi))return null;
+    if(frontBackConflict(cand[fi],fi,cand))return null;
+    var fm=cand[pairMate(fi)];
+    if(fm && !pairCompatible(cand[fi],fm))return null;
+  }
+  if(!requirementsStillFeasible(cand,selectedIds))return null;
+
+  var remaining=selectedIds.filter(function(id){return cand.indexOf(id)===-1});
+  var nodes=0,maxNodes=18000;
+
+  function recurse(rem){
+    nodes++;
+    if(nodes>maxNodes)return false;
+    if(!rem.length)return finalValid(cand);
+
+    var bestIndex=-1,bestChoices=null,bestHard=-1;
+
+    for(var ri=0;ri<rem.length;ri++){
+      var id=rem[ri],choices=[];
+      for(var seat=0;seat<30;seat++){
+        if(allowedPartial(id,seat,cand,selectedIds))choices.push(seat);
+      }
+      if(!choices.length)return false;
+
+      var rr=state.rules[id]||{};
+      var hard=(arrRule(rr.mustSitWith).length?8:0)+
+               (arrRule(rr.notBeside).length?4:0)+
+               (rr.front||rr.back||rr.wall||rr.noWall||rr.window||rr.noWindow||rr.middle?3:0)+
+               (rr.notFrontBack?2:0);
+
+      if(bestChoices===null || hard>bestHard || (hard===bestHard && choices.length<bestChoices.length)){
+        bestIndex=ri;bestChoices=choices;bestHard=hard;
+      }
+    }
+
+    var id=rem[bestIndex];
+    bestChoices.sort(function(a,b){
+      return choiceScore(id,b,cand,smart)-choiceScore(id,a,cand,smart);
+    });
+
+    var next=rem.slice();
+    next.splice(bestIndex,1);
+
+    for(var ci=0;ci<bestChoices.length;ci++){
+      var seat=bestChoices[ci];
+      cand[seat]=id;
+      if(requirementsStillFeasible(cand,selectedIds) && recurse(next))return true;
+      cand[seat]=null;
+    }
+    return false;
+  }
+
+  return recurse(remaining)?cand:null;
+}
+function makeCandidate(smart){
   var best=null,bestScore=-1e9;
-  for(var attempt=0;attempt<700;attempt++){
-    var cand=Array(30).fill(null);Object.keys(fixed).forEach(function(i){cand[Number(i)]=fixed[i]});
-    var order=attempt%3===0?ids.slice():shuffled(ids),ok=true;
-    for(var x=0;x<order.length;x++){
-      var id=order[x],choices=[],rr=state.rules[id]||{};
-      for(var i=0;i<30;i++)if(!cand[i] && allowedBasic(id,i,cand))choices.push(i);
-
-      // Har en godkjent «må sitte med»-elev allerede fått plass,
-      // plasser eleven direkte på nabopulten dersom den er ledig.
-      if(rr.mustSitWith){
-        var required=Array.isArray(rr.mustSitWith)?rr.mustSitWith:[rr.mustSitWith];
-        var forced=[];
-        required.forEach(function(companionId){
-          var companionSeat=cand.indexOf(companionId);
-          if(companionSeat!==-1){
-            var target=pairMate(companionSeat);
-            if(cand[target]===null && choices.indexOf(target)!==-1)forced.push(target);
-          }
-        });
-        if(forced.length)choices=forced;
-        else{
-          // Hvis ingen alternativ er plassert ennå, behold bare plasser med
-          // tom nabopult slik at et gyldig par fortsatt kan dannes.
-          var reservable=choices.filter(function(seatIndex){return cand[pairMate(seatIndex)]===null});
-          if(reservable.length)choices=reservable;
-        }
-      }
-
-      if(!choices.length){ok=false;break}
-      choices=shuffled(choices);
-      if(smart && state.previousSeats){
-        var old=state.previousSeats.indexOf(id);
-        choices.sort(function(a,b){return (a===old?1:0)-(b===old?1:0)});
-      }
-      cand[choices[0]]=id;
-    }
-    if(ok && finalValid(cand)){
-      var sc=candidateScore(cand,smart);if(sc>bestScore){bestScore=sc;best=cand}
-    }
+  // Several valid solutions are generated so "Smart tilfeldig" and the
+  // gender pairing preference can choose a better one without becoming
+  // hard constraints.
+  for(var attempt=0;attempt<45;attempt++){
+    var cand=solveOneCandidate(smart);
+    if(!cand)continue;
+    var score=candidateScore(cand,smart);
+    if(score>bestScore){bestScore=score;best=cand.slice()}
   }
   return best;
 }
@@ -815,6 +1049,7 @@ function randomize(smart){
 function openRules(id){
   editingRuleStudent=id;var s=studentById(id);if(!s)return;var r=state.rules[id]||{};
   gid("rulesTitle").textContent="Restriksjoner – "+s.name;
+  gid("rGender").value=s.gender||"";
   ["Front","Back","Wall","NoWall","Window","NoWindow","Middle"].forEach(function(k){gid("r"+k).checked=!!r[k.charAt(0).toLowerCase()+k.slice(1)]});
   var others=state.students.filter(function(x){return x.id!==id});
   ["rPreferBeside","rNotFrontBack"].forEach(function(elId){
@@ -881,6 +1116,8 @@ function saveRules(showPossible){
 
   commit();
   state.rules[editingRuleStudent]=nextRule;
+  var profileStudent=studentById(editingRuleStudent);
+  if(profileStudent)profileStudent.gender=gid("rGender").value||"";
   state.visualRuleStudent=showPossible?editingRuleStudent:null;
   gid("rulesModal").classList.add("hidden");
   renderAll();
@@ -927,13 +1164,13 @@ function downloadFile(filename,content,type){
 function saveCurrent(){
   var data={
     app:"Klassekart",
-    version:5,
+    version:9,
     savedAt:new Date().toISOString(),
     data:snapshotState(),
     snapshots:snapshots
   };
   // Keep a browser-local copy when the environment permits it.
-  safeSet("klassekart_current_v5",data);
+  safeSet("klassekart_current_v9",data);
   var stamp=new Date().toISOString().slice(0,10);
   downloadFile("klassekart-"+stamp+".json",JSON.stringify(data,null,2),"application/json");
   showToast("Klassekartet er lagret som en fil.");
@@ -1058,7 +1295,7 @@ function addSnapshot(){
 function applyImport(){
   var names=gid("importText").value.split(/\r?\n/).map(function(x){return x.trim()}).filter(Boolean);
   if(!names.length){alert("Lim inn minst ett elevnavn.");return}
-  commit();state.students=names.map(function(n){return{id:uid(),name:n}});
+  commit();state.students=names.map(function(n){return{id:uid(),name:n,gender:""}});
   state.seats=Array(30).fill(null);state.rules={};state.locked=[];state.previousSeats=null;state.visualRuleStudent=null;
   gid("importModal").classList.add("hidden");renderAll();
 }
@@ -1078,6 +1315,17 @@ function bind(){
   gid("sortBtn").addEventListener("click",function(){commit();state.students.sort(function(a,b){return a.name.localeCompare(b.name,"no")});renderAll()});
   gid("searchInput").addEventListener("input",renderStudents);
   gid("addStudentBtn").addEventListener("click",addStudent);gid("newStudent").addEventListener("keydown",function(e){if(e.key==="Enter")addStudent()});
+  gid("resetClassBtn").addEventListener("click",function(){
+    if(!confirm("Gjenopprette den faste listen med 30 elever? Nåværende plassering og restriksjoner blir nullstilt."))return;
+    commit();
+    state.students=DEFAULT_NAMES.map(function(name){return{id:uid(),name:name,gender:""}});
+    state.seats=Array(30).fill(null);
+    state.rules={};
+    state.locked=[];
+    state.previousSeats=null;
+    state.visualRuleStudent=null;
+    renderAll();
+  });
   gid("seatStudentSelect").addEventListener("change",function(){
     if(state.selectedSeat===null)return;var id=this.value;if(!id){commit();state.seats[state.selectedSeat]=null;renderAll()}else assignStudent(id,state.selectedSeat,true);
   });
@@ -1087,6 +1335,13 @@ function bind(){
   });
   gid("clearBtn").addEventListener("click",function(){commit();state.previousSeats=state.seats.slice();state.seats=Array(30).fill(null);renderAll()});
   document.querySelectorAll(".viewBtn").forEach(function(b){b.addEventListener("click",function(){state.view=this.dataset.view;renderAll()})});
+  document.querySelectorAll(".genderModeBtn").forEach(function(b){
+    b.addEventListener("click",function(){
+      commit();
+      state.pairGenderMode=this.dataset.genderMode;
+      renderAll();
+    });
+  });
   document.querySelectorAll(".tab").forEach(function(b){b.addEventListener("click",function(){
     document.querySelector(".right").dataset.activeTab=this.dataset.tab;
     ["placement","settings","rules"].forEach(function(t){gid(t+"Tab").classList.toggle("hidden",t!==b.dataset.tab)});
