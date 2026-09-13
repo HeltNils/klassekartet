@@ -236,7 +236,7 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
   display:grid;place-items:center;line-height:1;cursor:pointer;
 }
 .music-stop:hover{background:#e2eaf2;color:#10294b}
-@media print{.music-pill,#changesAudio{display:none!important}}
+@media print{.music-pill,#changesBowieAudio,#changesTupacAudio{display:none!important}}
 
 </style>
 </head>
@@ -363,10 +363,11 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
 <div id="toast" class="toast hidden"></div>
 
 
-<audio id="changesAudio" preload="auto" src="https://audio-ssl.itunes.apple.com/apple-assets-us-std-000001/AudioPreview62/v4/b4/79/b6/b479b69f-bbd1-7c71-8bd4-b5c93c81a336/mzaf_5086195590067603405.plus.aac.p.m4a"></audio>
+<audio id="changesBowieAudio" preload="auto" src="https://audio-ssl.itunes.apple.com/apple-assets-us-std-000001/AudioPreview62/v4/b4/79/b6/b479b69f-bbd1-7c71-8bd4-b5c93c81a336/mzaf_5086195590067603405.plus.aac.p.m4a"></audio>
+<video id="changesTupacAudio" preload="auto" playsinline style="display:none" src="https://video-ssl.itunes.apple.com/apple-assets-us-std-000001/Video125/v4/cf/57/f5/cf57f526-7047-ccfe-aab9-d40fa909d3a5/mzvf_5424212395291725221.640x464.h264lc.U.p.m4v"></video>
 <div id="musicPlayer" class="music-pill hidden" aria-live="polite">
   <span class="music-dot">♪</span>
-  <span class="music-label">Changes</span>
+  <span class="music-label" id="musicLabel">Changes</span>
   <button class="music-stop" id="stopMusicBtn" type="button" title="Stopp musikken">×</button>
 </div>
 
@@ -535,7 +536,7 @@ function traditionalGenderForName(name){
   return base[first]||"";
 }
 
-var AUTO_KEY="klassekart_autosave_v12";
+var AUTO_KEY="klassekart_autosave_v13";
 
 var state={
   students:DEFAULT_NAMES.map(function(name){return{id:uid(),name:name,gender:traditionalGenderForName(name)}}),
@@ -1291,21 +1292,41 @@ function placeOppositeGenderAsFarAsPossible(){
   showToast("Laget "+mixedPairs+" gutt–jente-par av "+knownPairs+" par med kjent kjønn.");
 }
 
+var activeChangesPlayer=null;
+
+function resetChangesPlayer(player){
+  if(!player)return;
+  try{
+    player.pause();
+    player.currentTime=0;
+  }catch(e){}
+}
+
 function playChanges(){
-  var audio=gid("changesAudio");
+  var bowie=gid("changesBowieAudio");
+  var tupac=gid("changesTupacAudio");
   var pill=gid("musicPlayer");
-  if(!audio)return;
+  var label=gid("musicLabel");
+  if(!bowie || !tupac)return;
+
+  resetChangesPlayer(bowie);
+  resetChangesPlayer(tupac);
+
+  // 50/50 random choice every time new seats are generated.
+  var chooseTupac=Math.random()<0.5;
+  activeChangesPlayer=chooseTupac?tupac:bowie;
+
+  if(label){
+    label.textContent=chooseTupac?"Changes – 2Pac":"Changes – David Bowie";
+  }
 
   try{
-    audio.pause();
-    audio.currentTime=0;
-    audio.volume=0.85;
-
-    var promise=audio.play();
+    activeChangesPlayer.volume=0.85;
+    var promise=activeChangesPlayer.play();
     if(promise && typeof promise.catch==="function"){
       promise.catch(function(){
-        // Some browsers delay media until the next explicit user gesture.
-        // Keep the tiny pill visible so the user can see the audio state.
+        // Browser media policies can occasionally delay playback,
+        // but the media is still selected and ready after the user click.
       });
     }
     if(pill)pill.classList.remove("hidden");
@@ -1313,11 +1334,11 @@ function playChanges(){
     if(pill)pill.classList.remove("hidden");
   }
 }
+
 function stopChanges(){
-  var audio=gid("changesAudio");
-  if(audio){
-    try{audio.pause();audio.currentTime=0}catch(e){}
-  }
+  resetChangesPlayer(gid("changesBowieAudio"));
+  resetChangesPlayer(gid("changesTupacAudio"));
+  activeChangesPlayer=null;
   var pill=gid("musicPlayer");
   if(pill)pill.classList.add("hidden");
 }
@@ -1462,13 +1483,13 @@ function downloadFile(filename,content,type){
 function saveCurrent(){
   var data={
     app:"Klassekart",
-    version:12,
+    version:13,
     savedAt:new Date().toISOString(),
     data:snapshotState(),
     snapshots:snapshots
   };
   // Keep a browser-local copy when the environment permits it.
-  safeSet("klassekart_current_v12",data);
+  safeSet("klassekart_current_v13",data);
   var stamp=new Date().toISOString().slice(0,10);
   downloadFile("klassekart-"+stamp+".json",JSON.stringify(data,null,2),"application/json");
   showToast("Klassekartet er lagret som en fil.");
@@ -1602,11 +1623,19 @@ function bind(){
   gid("randomBtn").addEventListener("click",function(){randomize(false)});
   gid("smartBtn").addEventListener("click",function(){randomize(true)});
   gid("stopMusicBtn").addEventListener("click",stopChanges);
-  gid("changesAudio").addEventListener("ended",function(){
-    gid("musicPlayer").classList.add("hidden");
-  });
-  gid("changesAudio").addEventListener("error",function(){
-    gid("musicPlayer").classList.add("hidden");
+  ["changesBowieAudio","changesTupacAudio"].forEach(function(id){
+    gid(id).addEventListener("ended",function(){
+      if(activeChangesPlayer===this){
+        gid("musicPlayer").classList.add("hidden");
+        activeChangesPlayer=null;
+      }
+    });
+    gid(id).addEventListener("error",function(){
+      if(activeChangesPlayer===this){
+        gid("musicPlayer").classList.add("hidden");
+        activeChangesPlayer=null;
+      }
+    });
   });
   gid("undoBtn").addEventListener("click",undo);gid("redoBtn").addEventListener("click",redo);
   gid("saveBtn").addEventListener("click",saveCurrent);
