@@ -295,7 +295,8 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
         <button class="btn genderModeBtn" data-gender-mode="mixedfree">Blandet</button>
         <button class="btn genderModeBtn" data-gender-mode="same">Jente–jente<br>gutt–gutt</button>
       </div>
-      <div class="help">Dette er en sterk preferanse, ikke en hard restriksjon. Elever uten satt kjønn plasseres fritt, så funksjonen låser aldri hele plasseringen.</div>
+      <button class="btn primary" id="oppositeGenderBtn" style="width:100%;margin-top:8px">⚥ Plasser gutt–jente så langt det går</button>
+      <div class="help">Denne knappen lager nye plasser og maksimerer antall pultepar med én gutt og én jente, samtidig som alle harde restriksjoner må følges.</div>
     </div>
 
     <div class="panel-section">
@@ -375,6 +376,25 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
         <option value="girl">Jente</option>
       </select>
       <div class="help">Den faste klasselisten er forhåndsutfylt etter tradisjonell navnebruk. Du kan alltid endre kjønn manuelt her.</div>
+    </div>
+    <div class="panel-section">
+      <label><strong>Kjønn på sidemannen</strong></label>
+
+      <label style="display:block;margin-top:8px">Bør sitte med</label>
+      <select class="input" id="rPreferGender" style="margin-top:5px">
+        <option value="">Ingen preferanse</option>
+        <option value="girl">Jente</option>
+        <option value="boy">Gutt</option>
+      </select>
+
+      <label style="display:block;margin-top:9px">Må sitte med</label>
+      <select class="input" id="rMustGender" style="margin-top:5px">
+        <option value="">Ingen krav</option>
+        <option value="girl">Jente</option>
+        <option value="boy">Gutt</option>
+      </select>
+
+      <div class="help">«Bør sitte med» er en sterk preferanse. «Må sitte med» er en hard restriksjon som må følges.</div>
     </div>
     <div class="checkgrid">
       <label class="check"><input type="checkbox" id="rFront"> Må sitte fremst</label>
@@ -491,7 +511,7 @@ function traditionalGenderForName(name){
   return base[first]||"";
 }
 
-var AUTO_KEY="klassekart_autosave_v10";
+var AUTO_KEY="klassekart_autosave_v11";
 
 var state={
   students:DEFAULT_NAMES.map(function(name){return{id:uid(),name:name,gender:traditionalGenderForName(name)}}),
@@ -606,6 +626,8 @@ function meta(index){
 function pairMate(i){return i%2===0?i+1:i-1}
 function studentById(id){return state.students.find(function(s){return s.id===id})}
 function studentName(id){var s=studentById(id);return s?s.name:""}
+function studentGender(id){var s=studentById(id);return s?s.gender:""}
+function genderLabel(g){return g==="girl"?"jente":(g==="boy"?"gutt":"")}
 function isLocked(id){return state.locked.indexOf(id)!==-1}
 function rule(id){if(!state.rules[id]) state.rules[id]={};return state.rules[id]}
 function ruleHasAny(r){
@@ -744,6 +766,8 @@ function renderRulesOverview(){
       var requiredNames=required.map(studentName).filter(Boolean);
       if(requiredNames.length)parts.push("må sitte med "+requiredNames.join(" eller "));
     }
+    if(r.preferGender)parts.push("bør sitte med "+genderLabel(r.preferGender));
+    if(r.mustGender)parts.push("må sitte med "+genderLabel(r.mustGender));
     if(r.preferBeside)parts.push("bør ved siden av "+studentName(r.preferBeside));
     if(r.notFrontBack)parts.push("ikke foran/bak "+studentName(r.notFrontBack));
     var d=document.createElement("div");d.className="rule-chip";d.innerHTML="<strong>"+esc(s.name)+"</strong><br>"+esc(parts.join(" · "));
@@ -857,6 +881,8 @@ function pairCompatible(a,b){
   var mustB=arrRule(rb.mustSitWith);
   if(mustA.length && mustA.indexOf(b)===-1)return false;
   if(mustB.length && mustB.indexOf(a)===-1)return false;
+  if(ra.mustGender && studentGender(b)!==ra.mustGender)return false;
+  if(rb.mustGender && studentGender(a)!==rb.mustGender)return false;
   return true;
 }
 function possibleSeatForStudent(studentId,seatIndex){
@@ -897,6 +923,25 @@ function possibleSeatForStudent(studentId,seatIndex){
                !frontBackConflict(companionId,mate,temp);
       });
       if(!possibleCompanion)return false;
+    }
+  }
+
+  var requiredGender=(state.rules[studentId]||{}).mustGender;
+  if(requiredGender){
+    if(mateId){
+      if(studentGender(mateId)!==requiredGender)return false;
+    }else{
+      var possibleGenderCompanion=state.students.some(function(companion){
+        if(companion.id===studentId || companion.gender!==requiredGender)return false;
+        if(!locationAllowed(companion.id,mate))return false;
+        var temp=candidate.slice();
+        var companionOld=temp.indexOf(companion.id);
+        if(companionOld!==-1)temp[companionOld]=null;
+        temp[mate]=companion.id;
+        return pairCompatible(studentId,companion.id) &&
+               !frontBackConflict(companion.id,mate,temp);
+      });
+      if(!possibleGenderCompanion)return false;
     }
   }
 
@@ -954,6 +999,22 @@ function allowedPartial(studentId,seatIndex,candidate,selectedIds){
     }
   }
 
+  if(r.mustGender){
+    if(mateId){
+      if(studentGender(mateId)!==r.mustGender)return false;
+    }else{
+      var possibleGenderMate=selectedIds.some(function(companionId){
+        if(companionId===studentId || studentGender(companionId)!==r.mustGender)return false;
+        var existing=candidate.indexOf(companionId);
+        if(existing!==-1)return existing===mate;
+        return locationAllowed(companionId,mate) &&
+               !frontBackConflict(companionId,mate,candidate) &&
+               pairCompatible(studentId,companionId);
+      });
+      if(!possibleGenderMate)return false;
+    }
+  }
+
   // If the person already sitting at the mate requires a specific companion,
   // this student must be one of the allowed options.
   if(mateId){
@@ -987,6 +1048,23 @@ function requirementsStillFeasible(candidate,selectedIds){
         if(!possible)return false;
       }
     }
+
+    var mustGender=(state.rules[id]||{}).mustGender;
+    if(mustGender){
+      if(mateId){
+        if(studentGender(mateId)!==mustGender)return false;
+      }else{
+        var possibleGender=selectedIds.some(function(companionId){
+          if(companionId===id || studentGender(companionId)!==mustGender)return false;
+          var existing=candidate.indexOf(companionId);
+          if(existing!==-1)return false;
+          return locationAllowed(companionId,mate) &&
+                 !frontBackConflict(companionId,mate,candidate) &&
+                 pairCompatible(id,companionId);
+        });
+        if(!possibleGender)return false;
+      }
+    }
   }
   return true;
 }
@@ -1000,6 +1078,8 @@ function finalValid(candidate){
 
     var req=arrRule((state.rules[id]||{}).mustSitWith);
     if(req.length && req.indexOf(mateId)===-1)return false;
+    var mustGender=(state.rules[id]||{}).mustGender;
+    if(mustGender && studentGender(mateId)!==mustGender)return false;
   }
   return true;
 }
@@ -1021,6 +1101,7 @@ function candidateScore(cand,smart){
     if(!id)return;
     var r=state.rules[id]||{},mate=pairMate(i);
     if(r.preferBeside && cand[mate]===r.preferBeside)score+=15;
+    if(r.preferGender && studentGender(cand[mate])===r.preferGender)score+=20;
     if(smart && state.previousSeats){
       var old=state.previousSeats.indexOf(id);
       if(old!==-1){
@@ -1039,6 +1120,7 @@ function choiceScore(id,seat,cand,smart){
   var mateId=cand[pairMate(seat)];
   var r=state.rules[id]||{};
   if(r.preferBeside && mateId===r.preferBeside)score+=25;
+  if(r.preferGender && mateId && studentGender(mateId)===r.preferGender)score+=24;
 
   if(mateId && state.pairGenderMode!=="mixedfree"){
     var a=studentById(id),b=studentById(mateId);
@@ -1112,6 +1194,7 @@ function solveOneCandidate(smart){
 
       var rr=state.rules[id]||{};
       var hard=(arrRule(rr.mustSitWith).length?8:0)+
+               (rr.mustGender?7:0)+
                (arrRule(rr.notBeside).length?4:0)+
                (rr.front||rr.back||rr.wall||rr.noWall||rr.window||rr.noWindow||rr.middle?3:0)+
                (rr.notFrontBack?2:0);
@@ -1153,6 +1236,37 @@ function makeCandidate(smart){
   }
   return best;
 }
+function placeOppositeGenderAsFarAsPossible(){
+  var oldMode=state.pairGenderMode;
+  state.pairGenderMode="mixed";
+
+  var before=state.seats.slice();
+  var cand=makeCandidate(true);
+
+  if(!cand){
+    state.pairGenderMode=oldMode;
+    renderViewButtons();
+    alert("Fant ingen gyldig plassering med de harde restriksjonene som er satt. Prøv å løsne på én eller flere «må»-regler.");
+    return;
+  }
+
+  commit();
+  state.pairGenderMode="mixed";
+  if(before.some(Boolean))state.previousSeats=before;
+  state.seats=cand;
+  renderAll();
+  playChanges();
+
+  var mixedPairs=0,knownPairs=0;
+  for(var i=0;i<30;i+=2){
+    var a=studentById(state.seats[i]),b=studentById(state.seats[i+1]);
+    if(!a||!b||!a.gender||!b.gender)continue;
+    knownPairs++;
+    if(a.gender!==b.gender)mixedPairs++;
+  }
+  showToast("Laget "+mixedPairs+" gutt–jente-par av "+knownPairs+" par med kjent kjønn.");
+}
+
 function playChanges(){
   var host=gid("musicFrameHost");
   var box=gid("musicPlayer");
@@ -1185,6 +1299,8 @@ function openRules(id){
   editingRuleStudent=id;var s=studentById(id);if(!s)return;var r=state.rules[id]||{};
   gid("rulesTitle").textContent="Restriksjoner – "+s.name;
   gid("rGender").value=s.gender||"";
+  gid("rPreferGender").value=r.preferGender||"";
+  gid("rMustGender").value=r.mustGender||"";
   ["Front","Back","Wall","NoWall","Window","NoWindow","Middle"].forEach(function(k){gid("r"+k).checked=!!r[k.charAt(0).toLowerCase()+k.slice(1)]});
   var others=state.students.filter(function(x){return x.id!==id});
   ["rPreferBeside","rNotFrontBack"].forEach(function(elId){
@@ -1224,7 +1340,10 @@ function collectRules(){
     window:gid("rWindow").checked,noWindow:gid("rNoWindow").checked,middle:gid("rMiddle").checked,
     notBeside:Array.from(gid("rNotBesideList").querySelectorAll('input[type="checkbox"]:checked')).map(function(cb){return cb.value}),
     mustSitWith:Array.from(gid("rMustSitWithList").querySelectorAll('input[type="checkbox"]:checked')).map(function(cb){return cb.value}),
-    preferBeside:gid("rPreferBeside").value||null,notFrontBack:gid("rNotFrontBack").value||null
+    preferGender:gid("rPreferGender").value||null,
+    mustGender:gid("rMustGender").value||null,
+    preferBeside:gid("rPreferBeside").value||null,
+    notFrontBack:gid("rNotFrontBack").value||null
   };
 }
 function normalizeRule(r){
@@ -1247,6 +1366,16 @@ function saveRules(showPossible){
   if(nextRule.preferBeside && blocked.indexOf(nextRule.preferBeside)!==-1){
     alert("En elev kan ikke både være «Bør sitte ved siden av» og «Ikke sitte ved siden av».");
     return;
+  }
+
+  if(nextRule.mustGender && nextRule.mustSitWith.length){
+    var genderCompatible=nextRule.mustSitWith.some(function(id){
+      return studentGender(id)===nextRule.mustGender;
+    });
+    if(!genderCompatible){
+      alert("Kravene krasjer: Ingen av de valgte elevene under «Må sitte med» er "+genderLabel(nextRule.mustGender)+".");
+      return;
+    }
   }
 
   commit();
@@ -1300,13 +1429,13 @@ function downloadFile(filename,content,type){
 function saveCurrent(){
   var data={
     app:"Klassekart",
-    version:10,
+    version:11,
     savedAt:new Date().toISOString(),
     data:snapshotState(),
     snapshots:snapshots
   };
   // Keep a browser-local copy when the environment permits it.
-  safeSet("klassekart_current_v10",data);
+  safeSet("klassekart_current_v11",data);
   var stamp=new Date().toISOString().slice(0,10);
   downloadFile("klassekart-"+stamp+".json",JSON.stringify(data,null,2),"application/json");
   showToast("Klassekartet er lagret som en fil.");
@@ -1478,6 +1607,7 @@ function bind(){
       renderAll();
     });
   });
+  gid("oppositeGenderBtn").addEventListener("click",placeOppositeGenderAsFarAsPossible);
   document.querySelectorAll(".tab").forEach(function(b){b.addEventListener("click",function(){
     document.querySelector(".right").dataset.activeTab=this.dataset.tab;
     ["placement","settings","rules"].forEach(function(t){gid(t+"Tab").classList.toggle("hidden",t!==b.dataset.tab)});
