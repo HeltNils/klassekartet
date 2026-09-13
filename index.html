@@ -210,6 +210,34 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
 }
 .possible-legend .ok{color:#218356}.possible-legend .no{color:#bc4742}
 
+
+.music-pill{
+  position:fixed;
+  left:14px;
+  bottom:14px;
+  z-index:2500;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  background:rgba(255,255,255,.96);
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:5px 7px 5px 9px;
+  box-shadow:0 5px 16px rgba(16,41,75,.14);
+  font-size:11px;
+  color:var(--navy);
+}
+.music-pill.hidden{display:none!important}
+.music-dot{font-size:12px;font-weight:900;color:var(--blue)}
+.music-label{font-weight:800;white-space:nowrap}
+.music-stop{
+  width:20px;height:20px;border:0;border-radius:999px;
+  background:#eef3f8;color:#536a82;padding:0;
+  display:grid;place-items:center;line-height:1;cursor:pointer;
+}
+.music-stop:hover{background:#e2eaf2;color:#10294b}
+@media print{.music-pill,#changesAudio{display:none!important}}
+
 </style>
 </head>
 <body>
@@ -335,15 +363,11 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
 <div id="toast" class="toast hidden"></div>
 
 
-<div id="musicPlayer" class="music-player hidden">
-  <div class="music-head">
-    <div>
-      <strong>♪ Changes – David Bowie</strong>
-      <span>Spilles når nye plasser deles ut</span>
-    </div>
-    <button class="icon" id="stopMusicBtn" type="button" title="Stopp musikken">×</button>
-  </div>
-  <div id="musicFrameHost"></div>
+<audio id="changesAudio" preload="auto" src="https://audio-ssl.itunes.apple.com/apple-assets-us-std-000001/AudioPreview62/v4/b4/79/b6/b479b69f-bbd1-7c71-8bd4-b5c93c81a336/mzaf_5086195590067603405.plus.aac.p.m4a"></audio>
+<div id="musicPlayer" class="music-pill hidden" aria-live="polite">
+  <span class="music-dot">♪</span>
+  <span class="music-label">Changes</span>
+  <button class="music-stop" id="stopMusicBtn" type="button" title="Stopp musikken">×</button>
 </div>
 
 <!-- Import -->
@@ -511,7 +535,7 @@ function traditionalGenderForName(name){
   return base[first]||"";
 }
 
-var AUTO_KEY="klassekart_autosave_v11";
+var AUTO_KEY="klassekart_autosave_v12";
 
 var state={
   students:DEFAULT_NAMES.map(function(name){return{id:uid(),name:name,gender:traditionalGenderForName(name)}}),
@@ -1268,25 +1292,34 @@ function placeOppositeGenderAsFarAsPossible(){
 }
 
 function playChanges(){
-  var host=gid("musicFrameHost");
-  var box=gid("musicPlayer");
-  if(!host || !box)return;
+  var audio=gid("changesAudio");
+  var pill=gid("musicPlayer");
+  if(!audio)return;
 
-  // Recreate the iframe so the track starts from the beginning each time.
-  host.innerHTML="";
-  var frame=document.createElement("iframe");
-  frame.src="https://www.youtube.com/embed/7fdhI3qUdSs?autoplay=1&controls=1&playsinline=1&rel=0";
-  frame.title="Changes (2015 Remaster) – David Bowie";
-  frame.allow="autoplay; encrypted-media; picture-in-picture";
-  frame.referrerPolicy="strict-origin-when-cross-origin";
-  host.appendChild(frame);
-  box.classList.remove("hidden");
+  try{
+    audio.pause();
+    audio.currentTime=0;
+    audio.volume=0.85;
+
+    var promise=audio.play();
+    if(promise && typeof promise.catch==="function"){
+      promise.catch(function(){
+        // Some browsers delay media until the next explicit user gesture.
+        // Keep the tiny pill visible so the user can see the audio state.
+      });
+    }
+    if(pill)pill.classList.remove("hidden");
+  }catch(e){
+    if(pill)pill.classList.remove("hidden");
+  }
 }
 function stopChanges(){
-  var host=gid("musicFrameHost");
-  if(host)host.innerHTML="";
-  var box=gid("musicPlayer");
-  if(box)box.classList.add("hidden");
+  var audio=gid("changesAudio");
+  if(audio){
+    try{audio.pause();audio.currentTime=0}catch(e){}
+  }
+  var pill=gid("musicPlayer");
+  if(pill)pill.classList.add("hidden");
 }
 
 function randomize(smart){
@@ -1429,13 +1462,13 @@ function downloadFile(filename,content,type){
 function saveCurrent(){
   var data={
     app:"Klassekart",
-    version:11,
+    version:12,
     savedAt:new Date().toISOString(),
     data:snapshotState(),
     snapshots:snapshots
   };
   // Keep a browser-local copy when the environment permits it.
-  safeSet("klassekart_current_v11",data);
+  safeSet("klassekart_current_v12",data);
   var stamp=new Date().toISOString().slice(0,10);
   downloadFile("klassekart-"+stamp+".json",JSON.stringify(data,null,2),"application/json");
   showToast("Klassekartet er lagret som en fil.");
@@ -1569,6 +1602,12 @@ function bind(){
   gid("randomBtn").addEventListener("click",function(){randomize(false)});
   gid("smartBtn").addEventListener("click",function(){randomize(true)});
   gid("stopMusicBtn").addEventListener("click",stopChanges);
+  gid("changesAudio").addEventListener("ended",function(){
+    gid("musicPlayer").classList.add("hidden");
+  });
+  gid("changesAudio").addEventListener("error",function(){
+    gid("musicPlayer").classList.add("hidden");
+  });
   gid("undoBtn").addEventListener("click",undo);gid("redoBtn").addEventListener("click",redo);
   gid("saveBtn").addEventListener("click",saveCurrent);
   gid("loadBtn").addEventListener("click",loadCurrent);
