@@ -1,0 +1,1137 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Klassekart</title>
+<style>
+:root{
+  --navy:#10294b;--blue:#1677e8;--green:#2ca56a;--red:#d9534f;
+  --line:#d7e2ef;--bg:#f6f9fc;--muted:#6c7d91;--wood:#e8b970;
+  --chair:#31475b;--room:#f3eee4;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--navy)}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+.hidden{display:none!important}
+.app{min-height:100vh;display:grid;grid-template-rows:auto 1fr}
+header{background:#fff;border-bottom:1px solid var(--line);padding:14px 18px;display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.brand h1{font-size:24px;margin:0}.brand p{margin:3px 0 0;color:var(--muted);font-size:13px}
+.top-actions{display:flex;gap:7px;flex-wrap:wrap}
+.btn{border:1px solid #cad7e6;background:#fff;color:var(--navy);padding:9px 12px;border-radius:8px;transition:.12s}
+.btn:hover{box-shadow:0 3px 10px rgba(16,41,75,.08);transform:translateY(-1px)}
+.btn:disabled{opacity:.42;cursor:not-allowed;transform:none;box-shadow:none}
+.btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn.success{background:var(--green);color:#fff;border-color:var(--green)}
+.btn.danger{color:var(--red);border-color:#efb8b5}
+.btn.small{padding:6px 8px;font-size:12px}
+.layout{min-height:0;display:grid;grid-template-columns:270px minmax(670px,1fr) 340px}
+aside{background:#fff;padding:16px;overflow:auto}
+.left{border-right:1px solid var(--line)}.right{border-left:1px solid var(--line)}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.section-head h2{font-size:18px;margin:0}
+.search,.input{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;outline:none;background:#fff}
+.search:focus,.input:focus,textarea:focus{border-color:#79afe7;box-shadow:0 0 0 3px #eaf4ff}
+.student-list{display:flex;flex-direction:column;gap:5px;max-height:calc(100vh - 270px);overflow:auto;padding-right:2px}
+.student{border:1px solid #dde6f0;border-radius:7px;background:#f9fbfe;display:flex;align-items:center;gap:6px;padding:6px}
+.student.used{background:#f1f6fb}
+.student-drag{flex:1;min-width:0;display:flex;align-items:center;gap:7px;cursor:grab}
+.student-num{width:23px;color:#70839a;font-size:12px}
+.student-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:650}
+.student-actions{display:flex;gap:3px}
+.icon{width:28px;height:28px;border:1px solid #d4dfeb;background:#fff;border-radius:6px;display:grid;place-items:center;padding:0}
+.icon:hover{background:#eef6ff}.icon.delete:hover{background:#fff0ef;color:var(--red)}
+.add-row{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:10px}
+.main{padding:18px;overflow:auto;display:flex;justify-content:center;align-items:flex-start}
+.room{width:min(760px,100%);min-height:790px;aspect-ratio:.88/1;background:var(--room);border:13px solid #344452;position:relative;box-shadow:0 8px 22px rgba(16,41,75,.1)}
+.board{position:absolute;left:18%;right:18%;top:-2px;height:30px;transform:translateY(-50%);border:2px solid #708092;background:#fff;border-radius:4px;display:grid;place-items:center;font-weight:800;z-index:8}
+.teacher{position:absolute;top:52px;left:50%;transform:translateX(-50%);width:190px;height:60px;border:2px solid #996725;border-radius:5px;background:linear-gradient(#efc47f,#dfa95c);display:grid;place-items:center;font-weight:800;z-index:6}
+.windows{position:absolute;left:-19px;top:80px;bottom:82px;width:18px;display:flex;flex-direction:column;justify-content:space-around;z-index:5}
+.window{height:120px;border:2px solid #1597e5;background:#bcecff}
+.side-label{position:absolute;font-weight:800;letter-spacing:.12em;font-size:12px;color:#3d536a}
+.window-label{left:-67px;top:48%;transform:rotate(-90deg)}.wall-label{right:-47px;top:49%;transform:rotate(90deg)}
+.door{position:absolute;right:-13px;bottom:12px;width:13px;height:86px;background:#dcc59e;border-left:2px solid #9d845f}
+.seat-area{position:absolute;left:7%;right:7%;top:145px;bottom:58px}
+.seat{position:absolute;width:10.6%;height:7.2%;transition:left .22s,top .22s,transform .22s;z-index:2}
+.desk{width:100%;height:72%;background:linear-gradient(#f0c987,#e5b46d);border:1px solid #b9803d;border-radius:5px;box-shadow:0 4px 0 rgba(112,73,25,.18);display:flex;align-items:center;justify-content:center;position:relative;overflow:visible}
+.chair{width:50%;height:26%;background:var(--chair);border-radius:0 0 12px 12px;margin:3px auto 0}
+.seat.selected .desk{box-shadow:0 0 0 3px rgba(22,119,232,.45),0 4px 0 rgba(112,73,25,.18)}
+.seat.locked .desk{box-shadow:0 0 0 3px rgba(239,174,43,.55),0 4px 0 rgba(112,73,25,.18)}
+.seat.valid .desk{box-shadow:0 0 0 3px rgba(44,165,106,.5),0 4px 0 rgba(112,73,25,.18)}
+.seat.invalid{opacity:.32}
+.seat-num{font-weight:800;font-size:12px}
+.seat-name-input{width:94%;border:0;background:transparent;text-align:center;outline:none;font-size:11px;font-weight:800;color:var(--navy);padding:2px}
+.lock-mark{position:absolute;right:-5px;top:-9px;font-size:12px;background:#fff;border-radius:999px;padding:1px}
+.tabs{display:flex;gap:5px;margin-bottom:12px}
+.tab{flex:1;border:1px solid var(--line);background:#fff;padding:8px 5px;border-radius:7px;font-size:12px}
+.tab.active{background:#edf6ff;border-color:#92bce7;color:#0d66b6;font-weight:800}
+.panel-section{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+.panel-section:first-child{border-top:0;padding-top:0;margin-top:0}
+.panel-section h3{font-size:14px;margin:0 0 8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.stack{display:grid;gap:7px}
+.help{font-size:12px;color:var(--muted);line-height:1.4;margin-top:7px}
+.status{margin-top:8px;padding:8px 9px;background:#f1f6fb;border:1px solid #dce8f3;border-radius:7px;font-size:12px;color:#52677c}
+.history{display:grid;gap:6px;margin-top:8px}
+.history-item{display:grid;grid-template-columns:1fr auto auto;gap:5px;align-items:center;border:1px solid var(--line);padding:7px;border-radius:7px}
+.history-item strong{font-size:12px}.history-item small{display:block;color:var(--muted);font-size:10px}
+.rule-list{display:grid;gap:7px}
+.rule-chip{border:1px solid #dce5ef;border-radius:8px;padding:8px;background:#fafcff;font-size:12px}
+.modal-backdrop{position:fixed;inset:0;background:rgba(10,25,45,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:18px}
+.modal{width:min(650px,96vw);max-height:88vh;overflow:auto;background:#fff;border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.25);padding:20px}
+.modal h2{margin:0 0 4px}.modal p{color:var(--muted);margin:0 0 14px}
+.modal-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+.modal-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:15px;flex-wrap:wrap}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{border:1px solid var(--line);border-radius:10px;padding:13px;background:#fafcff;cursor:pointer}
+.card:hover{border-color:#83b4e5}.card.active{border-color:var(--green);box-shadow:inset 0 0 0 2px #d8f1e4}
+.card h3{margin:0 0 5px;font-size:15px}.card p{font-size:12px;margin:0 0 9px}
+.checkgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.check{display:flex;align-items:center;gap:7px;border:1px solid var(--line);padding:8px;border-radius:7px}
+textarea{width:100%;min-height:220px;border:1px solid var(--line);border-radius:8px;padding:10px;resize:vertical;outline:none}
+@media(max-width:1100px){.layout{grid-template-columns:240px minmax(620px,1fr)}.right{grid-column:1/-1;border-left:0;border-top:1px solid var(--line)}}
+@media(max-width:800px){.layout{display:block}.left,.right{border:0;border-bottom:1px solid var(--line)}.student-list{max-height:300px}.main{padding:10px}.room{min-width:650px}}
+@media print{
+  header,.left,.right{display:none!important}.layout{display:block}.main{padding:0;overflow:visible}.room{width:100%;height:95vh;min-height:0;box-shadow:none}
+}
+
+.multi-student-list{
+  margin-top:7px;
+  max-height:190px;
+  overflow:auto;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:#fafcff;
+  padding:6px;
+  display:grid;
+  gap:4px;
+}
+.person-check{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 7px;
+  border-radius:6px;
+  cursor:pointer;
+}
+.person-check:hover{background:#eef6ff}
+.person-check input{margin:0}
+.multi-actions{
+  display:flex;
+  gap:6px;
+  margin-top:6px;
+}
+
+
+.print-bar{
+  position:fixed;left:0;right:0;top:0;z-index:3000;
+  background:#fff;border-bottom:1px solid var(--line);
+  padding:10px 16px;display:flex;justify-content:space-between;
+  align-items:center;gap:12px;box-shadow:0 4px 14px rgba(16,41,75,.12)
+}
+.print-bar strong{display:block}
+.print-bar span{font-size:12px;color:var(--muted)}
+.print-bar-actions{display:flex;gap:7px;flex-wrap:wrap}
+body.print-mode{background:#fff}
+body.print-mode header,
+body.print-mode .left,
+body.print-mode .right{display:none!important}
+body.print-mode .layout{display:block!important}
+body.print-mode .main{padding:72px 12px 18px;overflow:visible;display:flex;justify-content:center}
+body.print-mode .room{width:min(760px,96vw);min-height:790px}
+.toast{
+  position:fixed;right:18px;bottom:18px;z-index:5000;
+  background:#10294b;color:#fff;padding:11px 14px;border-radius:9px;
+  box-shadow:0 8px 24px rgba(0,0,0,.22);font-size:13px;max-width:360px
+}
+@media print{
+  .print-bar,.toast{display:none!important}
+  body.print-mode .main{padding:0!important}
+}
+
+
+.music-player{
+  position:fixed;
+  left:16px;
+  bottom:16px;
+  width:330px;
+  z-index:2500;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:12px;
+  box-shadow:0 12px 32px rgba(16,41,75,.18);
+  overflow:hidden;
+}
+.music-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 11px;
+}
+.music-head strong{display:block;font-size:13px}
+.music-head span{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+#musicFrameHost iframe{
+  display:block;
+  width:100%;
+  height:96px;
+  border:0;
+}
+@media print{
+  .music-player{display:none!important}
+}
+
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="brand"><h1>Klassekart</h1><p>Plasser elevene enkelt og raskt</p></div>
+  <div class="top-actions">
+    <button class="btn primary" id="randomBtn">⤨ Tilfeldig plassering</button>
+    <button class="btn" id="smartBtn">✨ Smart tilfeldig</button>
+    <button class="btn" id="undoBtn">↶ Angre</button>
+    <button class="btn" id="redoBtn">↷ Gjør om</button>
+    <button class="btn" id="importBtn">⇩ Importer</button>
+    <button class="btn" id="saveBtn">💾 Lagre</button>
+    <button class="btn" id="loadBtn">📂 Last inn</button>
+    <button class="btn" id="printBtn">🖨 Skriv ut</button>
+  </div>
+</header>
+
+<div class="layout">
+<aside class="left">
+  <div class="section-head"><h2>Elever (<span id="studentCount">30</span>)</h2><button class="btn small" id="sortBtn">A–Å</button></div>
+  <input class="search" id="searchInput" placeholder="Søk etter elev">
+  <div class="student-list" id="studentList"></div>
+  <div class="add-row"><input id="newStudent" class="input" placeholder="Nytt elevnavn"><button class="btn success" id="addStudentBtn">+ Legg til</button></div>
+</aside>
+
+<main class="main">
+  <div class="room">
+    <div class="board">TAVLE</div>
+    <div class="teacher">KATETER</div>
+    <div class="windows"><div class="window"></div><div class="window"></div><div class="window"></div></div>
+    <div class="side-label window-label">VINDUER</div>
+    <div class="side-label wall-label">VEGG</div>
+    <div class="door"></div>
+    <div class="seat-area" id="seatArea"></div>
+  </div>
+</main>
+
+<aside class="right">
+  <div class="tabs">
+    <button class="tab active" data-tab="placement">Plassering</button>
+    <button class="tab" data-tab="settings">Innstillinger</button>
+    <button class="tab" data-tab="rules">Restriksjoner</button>
+  </div>
+
+  <div id="placementTab">
+    <div class="panel-section">
+      <h3>Valgt pult</h3>
+      <select id="seatStudentSelect" class="input"></select>
+      <div class="grid2" style="margin-top:7px">
+        <button class="btn" id="swapBtn">⇄ Bytt to</button>
+        <button class="btn danger" id="clearBtn">Tøm alle</button>
+      </div>
+      <div class="help">Klikk en pult og velg elev. Du kan også dra elevnavn fra listen til en pult.</div>
+    </div>
+    <div class="panel-section">
+      <h3>Visning</h3>
+      <div class="grid2">
+        <button class="btn viewBtn active" data-view="name">Elevnavn</button>
+        <button class="btn viewBtn" data-view="number">Pultnummer</button>
+      </div>
+    </div>
+    <div class="panel-section">
+      <h3>Klassekart-historikk</h3>
+      <div class="add-row"><input id="snapshotName" class="input" placeholder="F.eks. Uke 37"><button class="btn small" id="snapshotBtn">Lagre</button></div>
+      <div id="historyList" class="history"></div>
+    </div>
+  </div>
+
+  <div id="settingsTab" class="hidden">
+    <div class="panel-section">
+      <h3>Oppsett</h3>
+      <button class="btn" style="width:100%" id="layoutBtn">▦ Alternative sittemåter</button>
+      <div class="status" id="layoutStatus">Aktivt oppsett: Tre rekker</div>
+    </div>
+    <div class="panel-section">
+      <h3>Tilfeldig plassering</h3>
+      <label class="check"><input type="checkbox" id="keepPlaced"> Behold allerede plasserte elever</label>
+      <div class="help">Låste elever beholdes alltid, uansett denne innstillingen.</div>
+    </div>
+  </div>
+
+  <div id="rulesTab" class="hidden">
+    <div class="panel-section">
+      <h3>Elevrestriksjoner</h3>
+      <div class="help">Bruk ⋯ ved en elev for å legge til regler. Her vises elever som har regler.</div>
+      <div id="rulesOverview" class="rule-list"></div>
+    </div>
+  </div>
+</aside>
+</div>
+</div>
+
+
+<input type="file" id="loadFileInput" accept=".json,application/json" class="hidden">
+
+<div id="printBar" class="print-bar hidden">
+  <div>
+    <strong>Utskriftsvisning</strong>
+    <span>«Åpne utskrift» lager et eget utskriftsvindu. Hvis nettleseren blokkerer det, bruk «Last ned utskriftsversjon».</span>
+  </div>
+  <div class="print-bar-actions">
+    <button class="btn primary" id="printNowBtn" type="button">🖨 Åpne utskrift</button>
+    <button class="btn" id="downloadPrintBtn" type="button">⬇ Last ned utskriftsversjon</button>
+    <button class="btn" id="exitPrintBtn" type="button">Tilbake</button>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+
+<div id="musicPlayer" class="music-player hidden">
+  <div class="music-head">
+    <div>
+      <strong>♪ Changes – David Bowie</strong>
+      <span>Spilles når nye plasser deles ut</span>
+    </div>
+    <button class="icon" id="stopMusicBtn" type="button" title="Stopp musikken">×</button>
+  </div>
+  <div id="musicFrameHost"></div>
+</div>
+
+<!-- Import -->
+<div class="modal-backdrop hidden" id="importModal">
+  <div class="modal">
+    <div class="modal-head"><div><h2>Importer elever</h2><p>Lim inn ett navn per linje. Elevlisten erstattes.</p></div><button class="icon" data-close="importModal">×</button></div>
+    <textarea id="importText"></textarea>
+    <div class="modal-actions"><button class="btn" data-close="importModal">Avbryt</button><button class="btn primary" id="applyImportBtn">Importer</button></div>
+  </div>
+</div>
+
+<!-- Layouts -->
+<div class="modal-backdrop hidden" id="layoutModal">
+  <div class="modal">
+    <div class="modal-head"><div><h2>Alternative sittemåter</h2><p>Alle forslagene bruker de samme 30 individuelle pultene. Klikk et oppsett for å endre rommet med én gang.</p></div><button class="icon" data-close="layoutModal">×</button></div>
+    <div class="cards" id="layoutCards"></div>
+    <div class="modal-actions"><button class="btn" data-close="layoutModal">Lukk</button></div>
+  </div>
+</div>
+
+<!-- Rules -->
+<div class="modal-backdrop hidden" id="rulesModal">
+  <div class="modal">
+    <div class="modal-head"><div><h2 id="rulesTitle">Restriksjoner</h2><p>Alle regler er valgfrie. Du kan velge flere alternativer både for «Ikke sitte ved siden av» og «Må sitte med».</p></div><button class="icon" data-close="rulesModal">×</button></div>
+    <div class="checkgrid">
+      <label class="check"><input type="checkbox" id="rFront"> Må sitte fremst</label>
+      <label class="check"><input type="checkbox" id="rBack"> Må sitte bakerst</label>
+      <label class="check"><input type="checkbox" id="rWall"> Må sitte ved vegg</label>
+      <label class="check"><input type="checkbox" id="rNoWall"> Ikke sitte ved vegg</label>
+      <label class="check"><input type="checkbox" id="rWindow"> Må sitte ved vindu</label>
+      <label class="check"><input type="checkbox" id="rNoWindow"> Ikke sitte ved vindu</label>
+      <label class="check"><input type="checkbox" id="rMiddle"> Må sitte i midtre rekke</label>
+    </div>
+    <div class="panel-section">
+      <label><strong>Ikke sitte ved siden av</strong></label>
+      <div class="help">Du kan velge så mange elever du vil.</div>
+      <div class="multi-student-list" id="rNotBesideList"></div>
+      <div class="multi-actions">
+        <button class="btn small" type="button" id="selectAllNotBeside">Velg alle</button>
+        <button class="btn small" type="button" id="clearAllNotBeside">Fjern valg</button>
+      </div>
+
+      <label style="display:block;margin-top:14px"><strong>Må sitte med</strong></label>
+      <div class="help">Velg ett eller flere alternativer. Eleven må ende opp i par med minst én av disse.</div>
+      <div class="multi-student-list" id="rMustSitWithList"></div>
+      <div class="multi-actions">
+        <button class="btn small" type="button" id="selectAllMustSitWith">Velg alle</button>
+        <button class="btn small" type="button" id="clearAllMustSitWith">Fjern valg</button>
+      </div>
+
+      <label style="display:block;margin-top:10px">Bør sitte ved siden av</label><select class="input" id="rPreferBeside"></select>
+      <label style="display:block;margin-top:8px">Ikke sitte rett foran/bak</label><select class="input" id="rNotFrontBack"></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="showPossibleBtn">Vis mulige plasser</button>
+      <button class="btn danger" id="clearRulesBtn">Fjern regler</button>
+      <button class="btn primary" id="saveRulesBtn">Lagre regler</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+function gid(id){return document.getElementById(id)}
+function uid(){
+  if(window.crypto && typeof window.crypto.randomUUID==="function") return window.crypto.randomUUID();
+  return "id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,9);
+}
+function clone(o){return JSON.parse(JSON.stringify(o))}
+function shuffled(a){
+  var b=a.slice();
+  for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t}
+  return b;
+}
+function esc(s){
+  return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]});
+}
+function safeGet(key,fallback){try{var v=localStorage.getItem(key);return v?JSON.parse(v):fallback}catch(e){return fallback}}
+function safeSet(key,value){try{localStorage.setItem(key,JSON.stringify(value));return true}catch(e){return false}}
+
+var state={
+  students:Array.from({length:30},function(_,i){return{id:uid(),name:"Elev "+(i+1)}}),
+  seats:Array(30).fill(null),
+  rules:{},
+  locked:[],
+  layout:"rows",
+  view:"name",
+  previousSeats:null,
+  selectedSeat:null,
+  swapFirst:null,
+  visualRuleStudent:null
+};
+var undoStack=[],redoStack=[],snapshots=safeGet("klassekart_snapshots_v3",[]);
+var editingRuleStudent=null;
+
+var layouts={
+  rows:{title:"Tre rekker",desc:"Standardoppsettet med tre langsgående rekker og fem pultepar i hver."},
+  groups:{title:"5 grupper à 6",desc:"Fem grupper med seks elever. Godt for samarbeid."},
+  horseshoe:{title:"Hestesko",desc:"Pulter rundt ytterkantene med åpent sentrum."},
+  islands:{title:"To arbeidsøyer",desc:"To store arbeidsområder med tydelig midtgang."},
+  wide:{title:"Tre rekker + bred gang",desc:"Som standard, men med mer luft mellom rekkene."}
+};
+
+function expandPairs(pairs){
+  var out=[];
+  pairs.forEach(function(p){
+    var rot=p.rot||0;
+    var rad=rot*Math.PI/180;
+    // Separation follows the pair's local horizontal axis.
+    var dx=5.35*Math.cos(rad),dy=5.35*Math.sin(rad);
+    out.push({x:p.x-dx,y:p.y-dy,rot:rot});
+    out.push({x:p.x+dx,y:p.y+dy,rot:rot});
+  });
+  return out;
+}
+function rowPairs(wide){
+  var pairs=[],xs=wide?[18,50,82]:[23,50,77],ys=[13,32,51,70,89];
+  ys.forEach(function(y){
+    xs.forEach(function(x){pairs.push({x:x,y:y,rot:0})});
+  });
+  return pairs;
+}
+function groupPairs(){
+  // Five groups. Each group contains exactly three desk-pairs = six pupils.
+  var groups=[[17,28],[50,28],[83,28],[33,70],[67,70]],pairs=[];
+  groups.forEach(function(c){
+    pairs.push({x:c[0],y:c[1]-10,rot:0});
+    pairs.push({x:c[0],y:c[1],rot:0});
+    pairs.push({x:c[0],y:c[1]+10,rot:0});
+  });
+  return pairs;
+}
+function horseshoePairs(){
+  // Open end towards the teacher (top of room).
+  var pairs=[],ys=[22,36,50,64,78],xs=[24,37,50,63,76];
+  ys.forEach(function(y){pairs.push({x:16,y:y,rot:90})});
+  xs.forEach(function(x){pairs.push({x:x,y:88,rot:0})});
+  ys.forEach(function(y){pairs.push({x:84,y:y,rot:90})});
+  return pairs;
+}
+function islandPairs(){
+  // Two clearly separated working islands, 8 pairs left / 7 pairs right.
+  var pairs=[],leftX=[20,36],rightX=[64,80],ys=[25,43,61,79];
+  ys.forEach(function(y){
+    leftX.forEach(function(x){pairs.push({x:x,y:y,rot:0})});
+  });
+  [25,43,61].forEach(function(y){
+    rightX.forEach(function(x){pairs.push({x:x,y:y,rot:0})});
+  });
+  pairs.push({x:72,y:79,rot:0});
+  return pairs;
+}
+function positions(){
+  var pairs;
+  if(state.layout==="groups")pairs=groupPairs();
+  else if(state.layout==="horseshoe")pairs=horseshoePairs();
+  else if(state.layout==="islands")pairs=islandPairs();
+  else pairs=rowPairs(state.layout==="wide");
+  return expandPairs(pairs);
+}
+function meta(index){
+  var p=positions()[index],col=p.x<36?0:(p.x>64?2:1),depth=p.y<30?0:(p.y>72?4:2);
+  return {x:p.x,y:p.y,col:col,depth:depth};
+}
+function pairMate(i){return i%2===0?i+1:i-1}
+function studentById(id){return state.students.find(function(s){return s.id===id})}
+function studentName(id){var s=studentById(id);return s?s.name:""}
+function isLocked(id){return state.locked.indexOf(id)!==-1}
+function rule(id){if(!state.rules[id]) state.rules[id]={};return state.rules[id]}
+function ruleHasAny(r){
+  return Object.keys(r||{}).some(function(k){
+    var v=r[k];
+    return Array.isArray(v)?v.length>0:!!v;
+  });
+}
+
+function snapshotState(){
+  return clone({students:state.students,seats:state.seats,rules:state.rules,locked:state.locked,layout:state.layout,view:state.view,previousSeats:state.previousSeats});
+}
+function restore(s){
+  state.students=clone(s.students||[]);
+  state.seats=(s.seats||[]).slice(0,30);while(state.seats.length<30)state.seats.push(null);
+  state.rules=clone(s.rules||{});
+  Object.keys(state.rules).forEach(function(id){
+    var rr=state.rules[id];
+    if(rr.notBeside && !Array.isArray(rr.notBeside)) rr.notBeside=[rr.notBeside];
+    if(!rr.notBeside) rr.notBeside=[];
+    if(rr.mustSitWith && !Array.isArray(rr.mustSitWith)) rr.mustSitWith=[rr.mustSitWith];
+    if(!rr.mustSitWith) rr.mustSitWith=[];
+  });
+  state.locked=(s.locked||[]).slice();
+  state.layout=s.layout||"rows";state.view=s.view||"name";state.previousSeats=s.previousSeats||null;
+  state.selectedSeat=null;state.swapFirst=null;state.visualRuleStudent=null;
+  renderAll();
+}
+function commit(){
+  undoStack.push(snapshotState());if(undoStack.length>50)undoStack.shift();redoStack=[];
+  updateUndo();
+}
+function undo(){if(!undoStack.length)return;redoStack.push(snapshotState());restore(undoStack.pop());updateUndo()}
+function redo(){if(!redoStack.length)return;undoStack.push(snapshotState());restore(redoStack.pop());updateUndo()}
+function updateUndo(){gid("undoBtn").disabled=!undoStack.length;gid("redoBtn").disabled=!redoStack.length}
+
+function renderStudents(){
+  var host=gid("studentList"),q=gid("searchInput").value.trim().toLowerCase(),used={};
+  state.seats.forEach(function(id){if(id)used[id]=1});
+  host.innerHTML="";
+  state.students.filter(function(s){return s.name.toLowerCase().indexOf(q)!==-1}).forEach(function(s){
+    var idx=state.students.indexOf(s),row=document.createElement("div");
+    row.className="student"+(used[s.id]?" used":"");row.dataset.id=s.id;
+    row.innerHTML='<div class="student-drag" draggable="true"><span class="student-num">'+(idx+1)+'</span><span class="student-name">'+esc(s.name)+'</span></div>'+
+      '<div class="student-actions"><button class="icon lockBtn" title="Lås/åpne">'+(isLocked(s.id)?"🔒":"🔓")+'</button>'+
+      '<button class="icon rulesBtn" title="Restriksjoner">⋯</button><button class="icon editBtn" title="Endre navn">✎</button>'+
+      '<button class="icon delete deleteBtn" title="Fjern elev">×</button></div>';
+    row.querySelector(".student-drag").addEventListener("dragstart",function(e){
+      e.dataTransfer.setData("text/student-id",s.id);e.dataTransfer.effectAllowed="move";
+    });
+    host.appendChild(row);
+  });
+  gid("studentCount").textContent=state.students.length;
+}
+function renderSeats(){
+  var host=gid("seatArea"),pos=positions();host.innerHTML="";
+  for(var i=0;i<30;i++){
+    var seat=document.createElement("div"),id=state.seats[i],p=pos[i];
+    seat.className="seat"+(state.selectedSeat===i?" selected":"")+(id&&isLocked(id)?" locked":"");
+    if(state.visualRuleStudent) seat.className+=allowedBasic(state.visualRuleStudent,i,state.seats)?" valid":" invalid";
+    seat.dataset.seat=i;seat.style.left=p.x+"%";seat.style.top=p.y+"%";seat.style.transform="translate(-50%,-50%) rotate("+(p.rot||0)+"deg)";
+    var content="";
+    if(state.view==="name"){
+      content='<input class="seat-name-input" data-seat-input="'+i+'" value="'+esc(id?studentName(id):"")+'" placeholder="'+(i+1)+'" title="Skriv navn direkte">';
+    }else content='<span class="seat-num">'+(i+1)+'</span>';
+    seat.innerHTML='<div class="desk">'+content+(id&&isLocked(id)?'<span class="lock-mark">🔒</span>':'')+'</div><div class="chair"></div>';
+    seat.addEventListener("click",function(e){
+      if(e.target.classList.contains("seat-name-input"))return;
+      selectSeat(Number(this.dataset.seat));
+    });
+    seat.addEventListener("dragover",function(e){e.preventDefault()});
+    seat.addEventListener("drop",function(e){
+      e.preventDefault();var sid=e.dataTransfer.getData("text/student-id");if(sid)assignStudent(sid,Number(this.dataset.seat),true);
+    });
+    host.appendChild(seat);
+  }
+  Array.from(host.querySelectorAll(".seat-name-input")).forEach(function(inp){
+    inp.addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();this.blur()}});
+    inp.addEventListener("change",function(){setSeatName(Number(this.dataset.seatInput),this.value)});
+    inp.addEventListener("focus",function(){state.selectedSeat=Number(this.dataset.seatInput);renderSeatSelect()});
+  });
+}
+function renderSeatSelect(){
+  var sel=gid("seatStudentSelect");sel.innerHTML='<option value="">– Tom plass –</option>';
+  state.students.forEach(function(s){var o=document.createElement("option");o.value=s.id;o.textContent=s.name;sel.appendChild(o)});
+  if(state.selectedSeat===null){sel.disabled=true;sel.value="";return}
+  sel.disabled=false;sel.value=state.seats[state.selectedSeat]||"";
+}
+function renderTabs(){
+  document.querySelectorAll(".tab").forEach(function(b){
+    var active=b.dataset.tab===b.closest(".right").dataset.activeTab;b.classList.toggle("active",active);
+  });
+}
+function renderRulesOverview(){
+  var host=gid("rulesOverview");host.innerHTML="";
+  var entries=state.students.filter(function(s){return ruleHasAny(state.rules[s.id])});
+  if(!entries.length){host.innerHTML='<div class="help">Ingen elevrestriksjoner ennå.</div>';return}
+  entries.forEach(function(s){
+    var r=state.rules[s.id],parts=[];
+    if(r.front)parts.push("fremst");if(r.back)parts.push("bakerst");if(r.wall)parts.push("ved vegg");if(r.noWall)parts.push("ikke ved vegg");
+    if(r.window)parts.push("ved vindu");if(r.noWindow)parts.push("ikke ved vindu");if(r.middle)parts.push("midtre rekke");
+    if(r.notBeside){
+      var blocked=Array.isArray(r.notBeside)?r.notBeside:[r.notBeside];
+      var blockedNames=blocked.map(studentName).filter(Boolean);
+      if(blockedNames.length)parts.push("ikke ved siden av "+blockedNames.join(", "));
+    }
+    if(r.mustSitWith){
+      var required=Array.isArray(r.mustSitWith)?r.mustSitWith:[r.mustSitWith];
+      var requiredNames=required.map(studentName).filter(Boolean);
+      if(requiredNames.length)parts.push("må sitte med "+requiredNames.join(" eller "));
+    }
+    if(r.preferBeside)parts.push("bør ved siden av "+studentName(r.preferBeside));
+    if(r.notFrontBack)parts.push("ikke foran/bak "+studentName(r.notFrontBack));
+    var d=document.createElement("div");d.className="rule-chip";d.innerHTML="<strong>"+esc(s.name)+"</strong><br>"+esc(parts.join(" · "));
+    host.appendChild(d);
+  });
+}
+function renderHistory(){
+  var host=gid("historyList");host.innerHTML="";
+  snapshots.slice(0,6).forEach(function(s){
+    var row=document.createElement("div");row.className="history-item";
+    row.innerHTML='<div><strong>'+esc(s.name)+'</strong><small>'+new Date(s.date).toLocaleDateString("no-NO")+'</small></div>'+
+      '<button class="btn small loadSnap">Hent</button><button class="btn small delSnap">×</button>';
+    row.querySelector(".loadSnap").addEventListener("click",function(){commit();state.previousSeats=state.seats.slice();restore(s.data)});
+    row.querySelector(".delSnap").addEventListener("click",function(){snapshots=snapshots.filter(function(x){return x.id!==s.id});safeSet("klassekart_snapshots_v3",snapshots);renderHistory()});
+    host.appendChild(row);
+  });
+}
+function renderViewButtons(){
+  document.querySelectorAll(".viewBtn").forEach(function(b){b.classList.toggle("active",b.dataset.view===state.view)});
+  gid("layoutStatus").textContent="Aktivt oppsett: "+layouts[state.layout].title;
+}
+function renderAll(){renderStudents();renderSeats();renderSeatSelect();renderRulesOverview();renderHistory();renderViewButtons();updateUndo()}
+
+function selectSeat(i){
+  state.visualRuleStudent=null;
+  if(state.swapFirst!==null){
+    if(state.swapFirst===i){state.swapFirst=null;gid("swapBtn").classList.remove("primary");renderSeats();return}
+    commit();var t=state.seats[state.swapFirst];state.seats[state.swapFirst]=state.seats[i];state.seats[i]=t;
+    state.swapFirst=null;gid("swapBtn").classList.remove("primary");state.selectedSeat=i;renderAll();return;
+  }
+  state.selectedSeat=i;renderSeats();renderSeatSelect();
+}
+function assignStudent(studentId,seatIndex,makeUndo){
+  if(makeUndo!==false)commit();
+  var old=state.seats.indexOf(studentId);if(old!==-1)state.seats[old]=null;
+  var displaced=state.seats[seatIndex];state.seats[seatIndex]=studentId;
+  if(displaced && displaced!==studentId && old!==-1)state.seats[old]=displaced;
+  renderAll();
+}
+function setSeatName(i,value){
+  var name=value.trim(),existing=state.seats[i];
+  if(!name){if(existing){commit();state.seats[i]=null;renderAll()}return}
+  if(existing){
+    var s=studentById(existing);if(s && s.name!==name){commit();s.name=name;renderAll()}return;
+  }
+  var same=state.students.find(function(s){return s.name.toLowerCase()===name.toLowerCase()});
+  if(same){assignStudent(same.id,i,true);return}
+  commit();var ns={id:uid(),name:name};state.students.push(ns);state.seats[i]=ns.id;renderAll();
+}
+function addStudent(){
+  var inp=gid("newStudent"),name=inp.value.trim();if(!name)return;
+  commit();state.students.push({id:uid(),name:name});inp.value="";renderAll();
+}
+function renameStudent(id){
+  var s=studentById(id);if(!s)return;
+  var n=prompt("Nytt navn:",s.name);if(n===null)return;n=n.trim();if(!n)return;
+  commit();s.name=n;renderAll();
+}
+function removeStudent(id){
+  commit();state.students=state.students.filter(function(s){return s.id!==id});
+  state.seats=state.seats.map(function(x){return x===id?null:x});
+  state.locked=state.locked.filter(function(x){return x!==id});
+  delete state.rules[id];
+  Object.keys(state.rules).forEach(function(k){
+    var rr=state.rules[k];
+    if(Array.isArray(rr.notBeside)){
+      rr.notBeside=rr.notBeside.filter(function(x){return x!==id});
+    }else if(rr.notBeside===id){
+      rr.notBeside=[];
+    }
+    if(Array.isArray(rr.mustSitWith)){
+      rr.mustSitWith=rr.mustSitWith.filter(function(x){return x!==id});
+    }else if(rr.mustSitWith===id){
+      rr.mustSitWith=[];
+    }
+    ["preferBeside","notFrontBack"].forEach(function(key){
+      if(rr[key]===id)rr[key]=null;
+    });
+  });
+  renderAll();
+}
+function toggleLock(id){
+  commit();if(isLocked(id))state.locked=state.locked.filter(function(x){return x!==id});else state.locked.push(id);renderAll();
+}
+
+function allowedBasic(studentId,seatIndex,candidate){
+  var r=state.rules[studentId]||{},m=meta(seatIndex);
+  if(r.front && m.y>=30)return false;if(r.back && m.y<=72)return false;
+  if(r.wall && m.x<=64)return false;if(r.noWall && m.x>64)return false;
+  if(r.window && m.x>=36)return false;if(r.noWindow && m.x<36)return false;
+  if(r.middle && !(m.x>=36&&m.x<=64))return false;
+  var mate=pairMate(seatIndex);
+  if(r.notBeside){
+    var blocked=Array.isArray(r.notBeside)?r.notBeside:[r.notBeside];
+    if(blocked.indexOf(candidate[mate])!==-1)return false;
+  }
+
+  // Hvis eleven selv har «Må sitte med», kan en allerede opptatt nabopult
+  // bare være en av de godkjente alternativene. Tom nabopult er foreløpig OK.
+  if(r.mustSitWith){
+    var required=Array.isArray(r.mustSitWith)?r.mustSitWith:[r.mustSitWith];
+    if(candidate[mate] && required.indexOf(candidate[mate])===-1)return false;
+  }
+
+  // Hvis eleven ved nabopulten har «Må sitte med», må denne eleven være
+  // et gyldig alternativ for naboen. Dette hindrer at paret fylles feil.
+  if(candidate[mate]){
+    var mateRule=state.rules[candidate[mate]]||{};
+    if(mateRule.mustSitWith){
+      var mateRequired=Array.isArray(mateRule.mustSitWith)?mateRule.mustSitWith:[mateRule.mustSitWith];
+      if(mateRequired.length && mateRequired.indexOf(studentId)===-1)return false;
+    }
+  }
+  return true;
+}
+function finalValid(candidate){
+  for(var i=0;i<30;i++){
+    var id=candidate[i];if(!id)continue;
+    if(!allowedBasic(id,i,candidate))return false;
+    var r=state.rules[id]||{};
+    if(r.notFrontBack){
+      var j=candidate.indexOf(r.notFrontBack);
+      if(j!==-1){var a=meta(i),b=meta(j);if(Math.abs(a.x-b.x)<7 && Math.abs(a.y-b.y)<24)return false}
+    }
+    if(r.mustSitWith){
+      var required=Array.isArray(r.mustSitWith)?r.mustSitWith:[r.mustSitWith];
+      var mateId=candidate[pairMate(i)];
+      if(required.length && required.indexOf(mateId)===-1)return false;
+    }
+  }
+  return true;
+}
+function candidateScore(cand,smart){
+  var score=0;
+  cand.forEach(function(id,i){
+    if(!id)return;
+    var r=state.rules[id]||{},mate=pairMate(i);
+    if(r.preferBeside && cand[mate]===r.preferBeside)score+=15;
+    if(r.mustSitWith){
+      var req=Array.isArray(r.mustSitWith)?r.mustSitWith:[r.mustSitWith];
+      if(req.indexOf(cand[mate])!==-1)score+=25;
+    }
+    if(smart && state.previousSeats){
+      var old=state.previousSeats.indexOf(id);
+      if(old!==-1){
+        if(old!==i)score+=4;
+        var a=meta(i),b=meta(old);if(a.x!==b.x)score+=2;if(a.y!==b.y)score+=2;if(pairMate(old)!==i)score+=2;
+      }
+    }
+  });
+  return score+Math.random();
+}
+function makeCandidate(smart){
+  var fixed={},fixedIds={};
+  state.seats.forEach(function(id,i){
+    if(id && (isLocked(id)||gid("keepPlaced").checked)){fixed[i]=id;fixedIds[id]=1}
+  });
+  var ids=state.students.map(function(s){return s.id}).filter(function(id){return !fixedIds[id]}).slice(0,30-Object.keys(fixed).length);
+  ids.sort(function(a,b){return Object.keys(state.rules[b]||{}).length-Object.keys(state.rules[a]||{}).length});
+  var best=null,bestScore=-1e9;
+  for(var attempt=0;attempt<700;attempt++){
+    var cand=Array(30).fill(null);Object.keys(fixed).forEach(function(i){cand[Number(i)]=fixed[i]});
+    var order=attempt%3===0?ids.slice():shuffled(ids),ok=true;
+    for(var x=0;x<order.length;x++){
+      var id=order[x],choices=[],rr=state.rules[id]||{};
+      for(var i=0;i<30;i++)if(!cand[i] && allowedBasic(id,i,cand))choices.push(i);
+
+      // Har en godkjent «må sitte med»-elev allerede fått plass,
+      // plasser eleven direkte på nabopulten dersom den er ledig.
+      if(rr.mustSitWith){
+        var required=Array.isArray(rr.mustSitWith)?rr.mustSitWith:[rr.mustSitWith];
+        var forced=[];
+        required.forEach(function(companionId){
+          var companionSeat=cand.indexOf(companionId);
+          if(companionSeat!==-1){
+            var target=pairMate(companionSeat);
+            if(cand[target]===null && choices.indexOf(target)!==-1)forced.push(target);
+          }
+        });
+        if(forced.length)choices=forced;
+        else{
+          // Hvis ingen alternativ er plassert ennå, behold bare plasser med
+          // tom nabopult slik at et gyldig par fortsatt kan dannes.
+          var reservable=choices.filter(function(seatIndex){return cand[pairMate(seatIndex)]===null});
+          if(reservable.length)choices=reservable;
+        }
+      }
+
+      if(!choices.length){ok=false;break}
+      choices=shuffled(choices);
+      if(smart && state.previousSeats){
+        var old=state.previousSeats.indexOf(id);
+        choices.sort(function(a,b){return (a===old?1:0)-(b===old?1:0)});
+      }
+      cand[choices[0]]=id;
+    }
+    if(ok && finalValid(cand)){
+      var sc=candidateScore(cand,smart);if(sc>bestScore){bestScore=sc;best=cand}
+    }
+  }
+  return best;
+}
+function playChanges(){
+  var host=gid("musicFrameHost");
+  var box=gid("musicPlayer");
+  if(!host || !box)return;
+
+  // Recreate the iframe so the track starts from the beginning each time.
+  host.innerHTML="";
+  var frame=document.createElement("iframe");
+  frame.src="https://www.youtube.com/embed/7fdhI3qUdSs?autoplay=1&controls=1&playsinline=1&rel=0";
+  frame.title="Changes (2015 Remaster) – David Bowie";
+  frame.allow="autoplay; encrypted-media; picture-in-picture";
+  frame.referrerPolicy="strict-origin-when-cross-origin";
+  host.appendChild(frame);
+  box.classList.remove("hidden");
+}
+function stopChanges(){
+  var host=gid("musicFrameHost");
+  if(host)host.innerHTML="";
+  var box=gid("musicPlayer");
+  if(box)box.classList.add("hidden");
+}
+
+function randomize(smart){
+  var before=state.seats.slice(),cand=makeCandidate(smart);
+  if(!cand){alert("Fant ingen gyldig plassering. Prøv å løsne på én eller flere restriksjoner.");return}
+  commit();if(before.some(Boolean))state.previousSeats=before;state.seats=cand;renderAll();playChanges();
+}
+
+function openRules(id){
+  editingRuleStudent=id;var s=studentById(id);if(!s)return;var r=state.rules[id]||{};
+  gid("rulesTitle").textContent="Restriksjoner – "+s.name;
+  ["Front","Back","Wall","NoWall","Window","NoWindow","Middle"].forEach(function(k){gid("r"+k).checked=!!r[k.charAt(0).toLowerCase()+k.slice(1)]});
+  var others=state.students.filter(function(x){return x.id!==id});
+  ["rPreferBeside","rNotFrontBack"].forEach(function(elId){
+    var sel=gid(elId);sel.innerHTML='<option value="">– Ingen –</option>';
+    others.forEach(function(o){var op=document.createElement("option");op.value=o.id;op.textContent=o.name;sel.appendChild(op)});
+  });
+
+  var blocked=Array.isArray(r.notBeside)?r.notBeside:(r.notBeside?[r.notBeside]:[]);
+  var blockHost=gid("rNotBesideList");
+  blockHost.innerHTML="";
+  others.forEach(function(o){
+    var label=document.createElement("label");
+    label.className="person-check";
+    label.innerHTML='<input type="checkbox" value="'+o.id+'"> <span>'+esc(o.name)+'</span>';
+    label.querySelector("input").checked=blocked.indexOf(o.id)!==-1;
+    blockHost.appendChild(label);
+  });
+
+  var mustWith=Array.isArray(r.mustSitWith)?r.mustSitWith:(r.mustSitWith?[r.mustSitWith]:[]);
+  var mustHost=gid("rMustSitWithList");
+  mustHost.innerHTML="";
+  others.forEach(function(o){
+    var label=document.createElement("label");
+    label.className="person-check";
+    label.innerHTML='<input type="checkbox" value="'+o.id+'"> <span>'+esc(o.name)+'</span>';
+    label.querySelector("input").checked=mustWith.indexOf(o.id)!==-1;
+    mustHost.appendChild(label);
+  });
+
+  gid("rPreferBeside").value=r.preferBeside||"";
+  gid("rNotFrontBack").value=r.notFrontBack||"";
+  gid("rulesModal").classList.remove("hidden");
+}
+function collectRules(){
+  return {
+    front:gid("rFront").checked,back:gid("rBack").checked,wall:gid("rWall").checked,noWall:gid("rNoWall").checked,
+    window:gid("rWindow").checked,noWindow:gid("rNoWindow").checked,middle:gid("rMiddle").checked,
+    notBeside:Array.from(gid("rNotBesideList").querySelectorAll('input[type="checkbox"]:checked')).map(function(cb){return cb.value}),
+    mustSitWith:Array.from(gid("rMustSitWithList").querySelectorAll('input[type="checkbox"]:checked')).map(function(cb){return cb.value}),
+    preferBeside:gid("rPreferBeside").value||null,notFrontBack:gid("rNotFrontBack").value||null
+  };
+}
+function normalizeRule(r){
+  if(r.front)r.back=false;if(r.back)r.front=false;if(r.wall)r.noWall=false;if(r.noWall)r.wall=false;if(r.window)r.noWindow=false;if(r.noWindow)r.window=false;
+  return r;
+}
+function saveRules(showPossible){
+  if(!editingRuleStudent)return;
+  var nextRule=normalizeRule(collectRules());
+
+  var blocked=nextRule.notBeside||[];
+  var required=nextRule.mustSitWith||[];
+  var conflict=required.filter(function(id){return blocked.indexOf(id)!==-1});
+  if(conflict.length){
+    var names=conflict.map(studentName).filter(Boolean).join(", ");
+    alert("Samme elev kan ikke både være «Må sitte med» og «Ikke sitte ved siden av»: "+names);
+    return;
+  }
+
+  if(nextRule.preferBeside && blocked.indexOf(nextRule.preferBeside)!==-1){
+    alert("En elev kan ikke både være «Bør sitte ved siden av» og «Ikke sitte ved siden av».");
+    return;
+  }
+
+  commit();
+  state.rules[editingRuleStudent]=nextRule;
+  state.visualRuleStudent=showPossible?editingRuleStudent:null;
+  gid("rulesModal").classList.add("hidden");
+  renderAll();
+}
+function clearRules(){
+  if(!editingRuleStudent)return;commit();delete state.rules[editingRuleStudent];state.visualRuleStudent=null;gid("rulesModal").classList.add("hidden");renderAll();
+}
+
+function renderLayoutCards(){
+  var host=gid("layoutCards");host.innerHTML="";
+  Object.keys(layouts).forEach(function(id){
+    var c=document.createElement("div");c.className="card"+(state.layout===id?" active":"");c.dataset.layout=id;
+    c.innerHTML="<h3>"+esc(layouts[id].title)+"</h3><p>"+esc(layouts[id].desc)+"</p><button class='btn small'>"+(state.layout===id?"✓ Aktivt":"Bruk dette")+"</button>";
+    c.addEventListener("click",function(){
+      if(state.layout!==id){
+        commit();
+        state.layout=id;
+        state.visualRuleStudent=null;
+        renderAll();
+      }
+      gid("layoutModal").classList.add("hidden");
+      showToast("Oppsett endret til «"+layouts[id].title+"».");
+    });
+    host.appendChild(c);
+  });
+}
+function showToast(message){
+  var t=gid("toast");
+  t.textContent=message;
+  t.classList.remove("hidden");
+  clearTimeout(showToast._timer);
+  showToast._timer=setTimeout(function(){t.classList.add("hidden")},2600);
+}
+function downloadFile(filename,content,type){
+  var blob=new Blob([content],{type:type||"application/octet-stream"});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement("a");
+  a.href=url;a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url)},1200);
+}
+function saveCurrent(){
+  var data={
+    app:"Klassekart",
+    version:5,
+    savedAt:new Date().toISOString(),
+    data:snapshotState(),
+    snapshots:snapshots
+  };
+  // Keep a browser-local copy when the environment permits it.
+  safeSet("klassekart_current_v5",data);
+  var stamp=new Date().toISOString().slice(0,10);
+  downloadFile("klassekart-"+stamp+".json",JSON.stringify(data,null,2),"application/json");
+  showToast("Klassekartet er lagret som en fil.");
+}
+function loadCurrent(){
+  // Prefer an actual file because this also works when browser storage is disabled.
+  gid("loadFileInput").value="";
+  gid("loadFileInput").click();
+}
+function loadFromFile(file){
+  if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(){
+    try{
+      var payload=JSON.parse(String(reader.result||""));
+      var incoming=payload.data||payload;
+      if(!incoming || !Array.isArray(incoming.students) || !Array.isArray(incoming.seats)){
+        throw new Error("Ugyldig klassekartfil");
+      }
+      commit();
+      restore(incoming);
+      if(Array.isArray(payload.snapshots)){
+        snapshots=payload.snapshots;
+        safeSet("klassekart_snapshots_v3",snapshots);
+        renderHistory();
+      }
+      showToast("Klassekartet er lastet inn.");
+    }catch(err){
+      alert("Kunne ikke lese filen. Velg en JSON-fil som er lagret fra Klassekart.");
+    }
+  };
+  reader.readAsText(file);
+}
+function printableDocument(){
+  var room=gid("seatArea").closest(".room").cloneNode(true);
+
+  // Inputs are unreliable in print snapshots. Replace them with plain text.
+  Array.from(room.querySelectorAll(".seat-name-input")).forEach(function(inp){
+    var span=document.createElement("span");
+    span.className="seat-print-name";
+    span.textContent=inp.value||"";
+    inp.parentNode.replaceChild(span,inp);
+  });
+
+  var title="Klassekart";
+  var date=new Date().toLocaleDateString("no-NO");
+
+  return '<!doctype html><html lang="no"><head><meta charset="utf-8">'+
+    '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+    '<title>'+title+' – '+date+'</title>'+
+    '<style>'+
+    '*{box-sizing:border-box}'+
+    'html,body{margin:0;padding:0;background:#fff;font-family:Arial,Helvetica,sans-serif;color:#10294b}'+
+    '.print-page{padding:12mm 10mm 8mm;text-align:center}'+
+    '.print-title{font-size:20px;font-weight:800;margin:0 0 2mm}'+
+    '.print-date{font-size:11px;color:#66788b;margin-bottom:5mm}'+
+    '.room{width:175mm;height:235mm;margin:0 auto;background:#f3eee4;border:3mm solid #344452;position:relative;overflow:visible}'+
+    '.board{position:absolute;left:18%;right:18%;top:-2px;height:8mm;transform:translateY(-50%);border:1px solid #708092;background:#fff;border-radius:2px;display:grid;place-items:center;font-weight:800;font-size:10px;z-index:8}'+
+    '.teacher{position:absolute;top:14mm;left:50%;transform:translateX(-50%);width:50mm;height:16mm;border:1px solid #996725;border-radius:3px;background:#efc47f;display:grid;place-items:center;font-weight:800;font-size:10px;z-index:6}'+
+    '.windows{position:absolute;left:-5mm;top:21mm;bottom:22mm;width:4mm;display:flex;flex-direction:column;justify-content:space-around;z-index:5}'+
+    '.window{height:31mm;border:1px solid #1597e5;background:#bcecff}'+
+    '.side-label{position:absolute;font-weight:800;letter-spacing:.12em;font-size:7px;color:#3d536a}'+
+    '.window-label{left:-18mm;top:48%;transform:rotate(-90deg)}'+
+    '.wall-label{right:-13mm;top:49%;transform:rotate(90deg)}'+
+    '.door{position:absolute;right:-3mm;bottom:3mm;width:3mm;height:23mm;background:#dcc59e;border-left:1px solid #9d845f}'+
+    '.seat-area{position:absolute;left:7%;right:7%;top:38mm;bottom:15mm}'+
+    '.seat{position:absolute;width:10.6%;height:7.2%;z-index:2}'+
+    '.desk{width:100%;height:72%;background:#e8b970;border:1px solid #b9803d;border-radius:2px;display:flex;align-items:center;justify-content:center;position:relative}'+
+    '.chair{width:50%;height:26%;background:#31475b;border-radius:0 0 5px 5px;margin:1mm auto 0}'+
+    '.seat-print-name,.seat-num{font-weight:800;font-size:7px;line-height:1.05;display:block;max-width:95%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
+    '.lock-mark{display:none}'+
+    '@page{size:A4 portrait;margin:0}'+
+    '@media print{.print-page{padding-top:9mm}}'+
+    '</style></head><body>'+
+    '<div class="print-page"><div class="print-title">'+title+'</div><div class="print-date">'+date+'</div>'+
+    room.outerHTML+
+    '</div>'+
+    '<script>window.addEventListener("load",function(){setTimeout(function(){try{window.print()}catch(e){}},350)});<\/script>'+
+    '</body></html>';
+}
+function downloadPrintable(){
+  var html=printableDocument();
+  var stamp=new Date().toISOString().slice(0,10);
+  downloadFile("klassekart-utskrift-"+stamp+".html",html,"text/html;charset=utf-8");
+  showToast("Utskriftsversjonen er lastet ned. Åpne filen og bruk Ctrl+P.");
+}
+function enterPrintMode(){
+  stopChanges();
+  document.body.classList.add("print-mode");
+  gid("printBar").classList.remove("hidden");
+  window.scrollTo(0,0);
+  showToast("Utskriftsvisning er klar.");
+}
+function exitPrintMode(){
+  document.body.classList.remove("print-mode");
+  gid("printBar").classList.add("hidden");
+}
+function openPrintDialog(){
+  // Printing is often blocked inside embedded HTML previews.
+  // Open a standalone printable document from the user click instead.
+  var html=printableDocument();
+  var blob=new Blob([html],{type:"text/html;charset=utf-8"});
+  var url=URL.createObjectURL(blob);
+  var win=null;
+  try{
+    win=window.open(url,"_blank");
+  }catch(e){win=null}
+
+  if(win){
+    showToast("Utskriftsvindu åpnet.");
+    setTimeout(function(){URL.revokeObjectURL(url)},15000);
+  }else{
+    URL.revokeObjectURL(url);
+    downloadPrintable();
+  }
+}
+function addSnapshot(){
+  var name=gid("snapshotName").value.trim()||("Klassekart "+new Date().toLocaleDateString("no-NO"));
+  snapshots.unshift({id:Date.now(),name:name,date:new Date().toISOString(),data:snapshotState()});
+  snapshots=snapshots.slice(0,20);safeSet("klassekart_snapshots_v3",snapshots);gid("snapshotName").value="";renderHistory();
+}
+function applyImport(){
+  var names=gid("importText").value.split(/\r?\n/).map(function(x){return x.trim()}).filter(Boolean);
+  if(!names.length){alert("Lim inn minst ett elevnavn.");return}
+  commit();state.students=names.map(function(n){return{id:uid(),name:n}});
+  state.seats=Array(30).fill(null);state.rules={};state.locked=[];state.previousSeats=null;state.visualRuleStudent=null;
+  gid("importModal").classList.add("hidden");renderAll();
+}
+
+function bind(){
+  gid("randomBtn").addEventListener("click",function(){randomize(false)});
+  gid("smartBtn").addEventListener("click",function(){randomize(true)});
+  gid("stopMusicBtn").addEventListener("click",stopChanges);
+  gid("undoBtn").addEventListener("click",undo);gid("redoBtn").addEventListener("click",redo);
+  gid("saveBtn").addEventListener("click",saveCurrent);
+  gid("loadBtn").addEventListener("click",loadCurrent);
+  gid("loadFileInput").addEventListener("change",function(){loadFromFile(this.files&&this.files[0])});
+  gid("printBtn").addEventListener("click",enterPrintMode);
+  gid("printNowBtn").addEventListener("click",openPrintDialog);
+  gid("downloadPrintBtn").addEventListener("click",downloadPrintable);
+  gid("exitPrintBtn").addEventListener("click",exitPrintMode);
+  gid("sortBtn").addEventListener("click",function(){commit();state.students.sort(function(a,b){return a.name.localeCompare(b.name,"no")});renderAll()});
+  gid("searchInput").addEventListener("input",renderStudents);
+  gid("addStudentBtn").addEventListener("click",addStudent);gid("newStudent").addEventListener("keydown",function(e){if(e.key==="Enter")addStudent()});
+  gid("seatStudentSelect").addEventListener("change",function(){
+    if(state.selectedSeat===null)return;var id=this.value;if(!id){commit();state.seats[state.selectedSeat]=null;renderAll()}else assignStudent(id,state.selectedSeat,true);
+  });
+  gid("swapBtn").addEventListener("click",function(){
+    if(state.selectedSeat===null){alert("Klikk først på en pult.");return}
+    state.swapFirst=state.selectedSeat;this.classList.add("primary");this.textContent="Velg pult nr. 2";
+  });
+  gid("clearBtn").addEventListener("click",function(){commit();state.previousSeats=state.seats.slice();state.seats=Array(30).fill(null);renderAll()});
+  document.querySelectorAll(".viewBtn").forEach(function(b){b.addEventListener("click",function(){state.view=this.dataset.view;renderAll()})});
+  document.querySelectorAll(".tab").forEach(function(b){b.addEventListener("click",function(){
+    document.querySelector(".right").dataset.activeTab=this.dataset.tab;
+    ["placement","settings","rules"].forEach(function(t){gid(t+"Tab").classList.toggle("hidden",t!==b.dataset.tab)});
+    document.querySelectorAll(".tab").forEach(function(x){x.classList.toggle("active",x===b)});
+  })});
+  gid("layoutBtn").addEventListener("click",function(){renderLayoutCards();gid("layoutModal").classList.remove("hidden")});
+  gid("importBtn").addEventListener("click",function(){gid("importText").value=state.students.map(function(s){return s.name}).join("\n");gid("importModal").classList.remove("hidden")});
+  gid("applyImportBtn").addEventListener("click",applyImport);gid("snapshotBtn").addEventListener("click",addSnapshot);
+
+  gid("studentList").addEventListener("click",function(e){
+    var row=e.target.closest(".student");if(!row)return;var id=row.dataset.id;
+    if(e.target.closest(".lockBtn"))toggleLock(id);
+    else if(e.target.closest(".rulesBtn"))openRules(id);
+    else if(e.target.closest(".editBtn"))renameStudent(id);
+    else if(e.target.closest(".deleteBtn"))removeStudent(id);
+  });
+
+  document.querySelectorAll("[data-close]").forEach(function(b){b.addEventListener("click",function(){gid(this.dataset.close).classList.add("hidden")})});
+  document.querySelectorAll(".modal-backdrop").forEach(function(m){m.addEventListener("click",function(e){if(e.target===m)m.classList.add("hidden")})});
+  gid("saveRulesBtn").addEventListener("click",function(){saveRules(false)});
+  gid("showPossibleBtn").addEventListener("click",function(){saveRules(true)});
+  gid("clearRulesBtn").addEventListener("click",clearRules);
+  gid("selectAllNotBeside").addEventListener("click",function(){
+    gid("rNotBesideList").querySelectorAll('input[type="checkbox"]').forEach(function(cb){cb.checked=true});
+  });
+  gid("clearAllNotBeside").addEventListener("click",function(){
+    gid("rNotBesideList").querySelectorAll('input[type="checkbox"]').forEach(function(cb){cb.checked=false});
+  });
+  gid("selectAllMustSitWith").addEventListener("click",function(){
+    gid("rMustSitWithList").querySelectorAll('input[type="checkbox"]').forEach(function(cb){cb.checked=true});
+  });
+  gid("clearAllMustSitWith").addEventListener("click",function(){
+    gid("rMustSitWithList").querySelectorAll('input[type="checkbox"]').forEach(function(cb){cb.checked=false});
+  });
+
+  document.addEventListener("keydown",function(e){
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();if(e.shiftKey)redo();else undo()}
+    if(e.key==="Escape"){document.querySelectorAll(".modal-backdrop").forEach(function(m){m.classList.add("hidden")});state.visualRuleStudent=null;renderSeats()}
+  });
+}
+
+document.querySelector(".right").dataset.activeTab="placement";
+bind();
+renderAll();
+})();
+</script>
+</body>
+</html>
