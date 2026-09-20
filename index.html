@@ -246,6 +246,7 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
   <div class="brand"><h1>Klassekart</h1><p>Plasser elevene enkelt og raskt</p></div>
   <div class="top-actions">
     <button class="btn primary" id="randomBtn">⤨ Tilfeldig plassering</button>
+    <button class="btn" id="randomAvoidPreviousBtn">↻ Ingen på samme plass som sist</button>
     <button class="btn" id="smartBtn">✨ Smart tilfeldig</button>
     <button class="btn" id="undoBtn">↶ Angre</button>
     <button class="btn" id="redoBtn">↷ Gjør om</button>
@@ -338,6 +339,7 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
     <div class="panel-section">
       <h3>Elevrestriksjoner</h3>
       <div class="help">Bruk ⋯ ved en elev for å legge til regler. Her vises elever som har regler.</div>
+      <button class="btn" id="loadSavedRestrictions" style="width:100%;margin-top:10px">🔐 Last inn lagrede restriksjoner</button>
       <div id="rulesOverview" class="rule-list"></div>
     </div>
   </div>
@@ -539,6 +541,7 @@ function traditionalGenderForName(name){
 }
 
 var AUTO_KEY="klassekart_autosave_v15";
+var RESTRICTIONS_KEY="klassekart_restrictions_v1";
 
 var state={
   students:DEFAULT_NAMES.map(function(name){return{id:uid(),name:name,gender:traditionalGenderForName(name)}}),
@@ -811,6 +814,43 @@ function renderHistory(){
     row.querySelector(".delSnap").addEventListener("click",function(){snapshots=snapshots.filter(function(x){return x.id!==s.id});safeSet("klassekart_snapshots_v3",snapshots);renderHistory()});
     host.appendChild(row);
   });
+}
+
+function saveRestrictionsProfile(){
+  safeSet(RESTRICTIONS_KEY,{
+    savedAt:new Date().toISOString(),
+    students:state.students.map(function(student){return{id:student.id,name:student.name}}),
+    rules:clone(state.rules)
+  });
+}
+
+function loadSavedRestrictions(){
+  var password=prompt("Skriv passordet for å laste inn lagrede restriksjoner:");
+  if(password!=="Nils"){
+    if(password!==null)alert("Feil passord.");
+    return;
+  }
+  var payload=safeGet(RESTRICTIONS_KEY,null);
+  if(!payload){
+    var autosaved=safeGet(AUTO_KEY,null);
+    if(autosaved&&autosaved.rules)payload={students:autosaved.students||[],rules:autosaved.rules};
+  }
+  if(!payload){alert("Fant ingen lagrede restriksjoner.");return}
+
+  var currentByName={};
+  state.students.forEach(function(student){currentByName[student.name.trim().toLowerCase()]=student.id});
+  var idMap={};
+  (payload.students||[]).forEach(function(student){idMap[student.id]=currentByName[student.name.trim().toLowerCase()]||student.id});
+  var remap=function(id){return idMap[id]||id};
+
+  commit();
+  state.rules={};
+  Object.keys(payload.rules||{}).forEach(function(oldId){
+    var newId=remap(oldId);
+    if(studentById(newId))state.rules[newId]=clone(payload.rules[oldId]);
+  });
+  renderAll();
+  alert("Lagrede restriksjoner er lastet inn og kan nå oppdateres.");
 }
 function renderViewButtons(){
   document.querySelectorAll(".viewBtn").forEach(function(b){b.classList.toggle("active",b.dataset.view===state.view)});
@@ -1168,7 +1208,7 @@ function choiceScore(id,seat,cand,smart){
   }
   return score;
 }
-function solveOneCandidate(smart){
+function solveOneCandidate(smart,avoidPrevious){
   var fixed={},fixedIds={};
   state.seats.forEach(function(id,i){
     if(id && (isLocked(id)||gid("keepPlaced").checked)){
@@ -1232,6 +1272,12 @@ function solveOneCandidate(smart){
     }
 
     var id=rem[bestIndex];
+    bestChoices=bestChoices.filter(function(seat){
+      if(!avoidPrevious||!state.previousSeats)return true;
+      var old=state.previousSeats.indexOf(id);
+      return old===-1||old!==seat;
+    });
+    if(!bestChoices.length)return false;
     bestChoices.sort(function(a,b){
       return choiceScore(id,b,cand,smart)-choiceScore(id,a,cand,smart);
     });
@@ -1250,13 +1296,13 @@ function solveOneCandidate(smart){
 
   return recurse(remaining)?cand:null;
 }
-function makeCandidate(smart){
+function makeCandidate(smart,avoidPrevious){
   var best=null,bestScore=-1e9;
   // Several valid solutions are generated so "Smart tilfeldig" and the
   // gender pairing preference can choose a better one without becoming
   // hard constraints.
   for(var attempt=0;attempt<45;attempt++){
-    var cand=solveOneCandidate(smart);
+    var cand=solveOneCandidate(smart,avoidPrevious);
     if(!cand)continue;
     var score=candidateScore(cand,smart);
     if(score>bestScore){bestScore=score;best=cand.slice()}
@@ -1418,8 +1464,8 @@ function stopChanges(){
   if(pill)pill.classList.add("hidden");
 }
 
-function randomize(smart){
-  var before=state.seats.slice(),cand=makeCandidate(smart);
+function randomize(smart,avoidPrevious){
+  var before=state.seats.slice(),cand=makeCandidate(smart,avoidPrevious);
   if(!cand){alert("Fant ingen gyldig plassering. Prøv å løsne på én eller flere restriksjoner.");return}
   commit();if(before.some(Boolean))state.previousSeats=before;state.seats=cand;renderAll();playChanges();
 }
@@ -1509,6 +1555,7 @@ function saveRules(showPossible){
 
   commit();
   state.rules[editingRuleStudent]=nextRule;
+  saveRestrictionsProfile();
   var profileStudent=studentById(editingRuleStudent);
   if(profileStudent)profileStudent.gender=gid("rGender").value||"";
   state.visualRuleStudent=showPossible?editingRuleStudent:null;
@@ -1517,7 +1564,7 @@ function saveRules(showPossible){
   if(showPossible)showToast("Grønne pulter er mulige for "+studentName(editingRuleStudent)+". Røde pulter bryter en restriksjon.");
 }
 function clearRules(){
-  if(!editingRuleStudent)return;commit();delete state.rules[editingRuleStudent];state.visualRuleStudent=null;gid("rulesModal").classList.add("hidden");renderAll();
+  if(!editingRuleStudent)return;commit();delete state.rules[editingRuleStudent];saveRestrictionsProfile();state.visualRuleStudent=null;gid("rulesModal").classList.add("hidden");renderAll();
 }
 
 function renderLayoutCards(){
@@ -1696,6 +1743,7 @@ function applyImport(){
 
 function bind(){
   gid("randomBtn").addEventListener("click",function(){randomize(false)});
+  gid("randomAvoidPreviousBtn").addEventListener("click",function(){randomize(false,true)});
   gid("smartBtn").addEventListener("click",function(){randomize(true)});
   gid("stopMusicBtn").addEventListener("click",stopChanges);
   ["changesBowieAudio","changesTupacAudio","everybodyChangingAudio","changeIsGonnaComeAudio"].forEach(function(id){
@@ -1720,6 +1768,7 @@ function bind(){
   gid("printNowBtn").addEventListener("click",openPrintDialog);
   gid("downloadPrintBtn").addEventListener("click",downloadPrintable);
   gid("exitPrintBtn").addEventListener("click",exitPrintMode);
+  gid("loadSavedRestrictions").addEventListener("click",loadSavedRestrictions);
   gid("sortBtn").addEventListener("click",function(){commit();state.students.sort(function(a,b){return a.name.localeCompare(b.name,"no")});renderAll()});
   gid("searchInput").addEventListener("input",renderStudents);
   gid("addStudentBtn").addEventListener("click",addStudent);gid("newStudent").addEventListener("keydown",function(e){if(e.key==="Enter")addStudent()});
