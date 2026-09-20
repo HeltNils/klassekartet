@@ -452,6 +452,8 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
       </div>
 
       <label style="display:block;margin-top:10px">Bør sitte ved siden av</label><select class="input" id="rPreferBeside"></select>
+      <label style="display:block;margin-top:8px">Bør sitte i nærheten av</label><select class="input" id="rPreferNear"></select>
+      <label style="display:block;margin-top:8px">Bør sitte langt unna</label><select class="input" id="rPreferFar"></select>
       <label style="display:block;margin-top:8px">Ikke sitte rett foran/bak</label><select class="input" id="rNotFrontBack"></select>
     </div>
     <div class="modal-actions">
@@ -1168,6 +1170,10 @@ function candidateScore(cand,smart){
     if(!id)return;
     var r=state.rules[id]||{},mate=pairMate(i);
     if(r.preferBeside && cand[mate]===r.preferBeside)score+=15;
+    var nearIndex=r.preferNear?cand.indexOf(r.preferNear):-1;
+    var farIndex=r.preferFar?cand.indexOf(r.preferFar):-1;
+    if(nearIndex!==-1 && nearIndex!==mate)score+=Math.max(0,8-seatDistance(i,nearIndex))*7;
+    if(farIndex!==-1)score+=seatDistance(i,farIndex)*5;
     if(r.preferGender && studentGender(cand[mate])===r.preferGender)score+=20;
     if(smart && state.previousSeats){
       var old=state.previousSeats.indexOf(id);
@@ -1181,6 +1187,11 @@ function candidateScore(cand,smart){
     }
   });
   return score+Math.random();
+}
+function seatDistance(a,b){
+  var x=meta(a),y=meta(b);
+  if(Math.floor(a/2)===Math.floor(b/2))return 0;
+  return Math.abs(x.y-y.y)+Math.abs(x.x-y.x)/20;
 }
 function choiceScore(id,seat,cand,smart){
   var score=Math.random()*2;
@@ -1478,7 +1489,7 @@ function openRules(id){
   gid("rMustGender").value=r.mustGender||"";
   ["Front","Back","Wall","NoWall","Window","NoWindow","Middle"].forEach(function(k){gid("r"+k).checked=!!r[k.charAt(0).toLowerCase()+k.slice(1)]});
   var others=state.students.filter(function(x){return x.id!==id});
-  ["rPreferBeside","rNotFrontBack"].forEach(function(elId){
+  ["rPreferBeside","rPreferNear","rPreferFar","rNotFrontBack"].forEach(function(elId){
     var sel=gid(elId);sel.innerHTML='<option value="">– Ingen –</option>';
     others.forEach(function(o){var op=document.createElement("option");op.value=o.id;op.textContent=o.name;sel.appendChild(op)});
   });
@@ -1506,6 +1517,8 @@ function openRules(id){
   });
 
   gid("rPreferBeside").value=r.preferBeside||"";
+  gid("rPreferNear").value=r.preferNear||"";
+  gid("rPreferFar").value=r.preferFar||"";
   gid("rNotFrontBack").value=r.notFrontBack||"";
   gid("rulesModal").classList.remove("hidden");
 }
@@ -1518,6 +1531,8 @@ function collectRules(){
     preferGender:gid("rPreferGender").value||null,
     mustGender:gid("rMustGender").value||null,
     preferBeside:gid("rPreferBeside").value||null,
+    preferNear:gid("rPreferNear").value||null,
+    preferFar:gid("rPreferFar").value||null,
     notFrontBack:gid("rNotFrontBack").value||null
   };
 }
