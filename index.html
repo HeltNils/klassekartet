@@ -875,7 +875,16 @@ async function saveCloudRestrictions(){
   var password=await askCloudPassword("Lagre restriksjoner","Passordet krypterer restriksjonene før de lagres.");
   if(password===null)return;
   if(!password){alert("Skriv inn et passord.");return}
-  var encrypted=await encryptRestrictions(password,{students:state.students.map(function(student){return{id:student.id,name:student.name}}),rules:state.rules});
+  var encrypted=await encryptRestrictions(password,{
+    students:state.students.map(function(student){return{id:student.id,name:student.name}}),
+    rules:state.rules,
+    seats:state.seats,
+    previousSeats:state.previousSeats,
+    locked:state.locked,
+    layout:state.layout,
+    view:state.view,
+    pairGenderMode:state.pairGenderMode
+  });
   var result=await cloudSupabase.from("klassekart_restrictions").upsert({profile_id:CLOUD_PROFILE_ID,updated_at:new Date().toISOString(),encrypted_data:encrypted.encrypted_data,salt:encrypted.salt,iv:encrypted.iv},{onConflict:"profile_id"});
   if(result.error)alert("Kunne ikke lagre restriksjonene: "+result.error.message);
   else alert("Restriksjonene er lagret på nett. Du kan laste dem inn fra en annen PC med samme passord.");
@@ -892,7 +901,18 @@ async function loadCloudRestrictions(){
   var currentByName={};state.students.forEach(function(student){currentByName[student.name.trim().toLowerCase()]=student.id});
   var idMap={};(payload.students||[]).forEach(function(student){idMap[student.id]=currentByName[student.name.trim().toLowerCase()]||student.id});
   var remap=function(id){return idMap[id]||id};
-  commit();state.rules={};Object.keys(payload.rules||{}).forEach(function(id){var mapped=remap(id);if(studentById(mapped))state.rules[mapped]=clone(payload.rules[id])});
+  commit();
+  state.rules={};
+  Object.keys(payload.rules||{}).forEach(function(id){var mapped=remap(id);if(studentById(mapped))state.rules[mapped]=clone(payload.rules[id])});
+  var remapSeats=function(seatList){return Array.isArray(seatList)?seatList.map(function(id){return id?remap(id):null}).slice(0,30):null};
+  var loadedSeats=remapSeats(payload.seats);
+  if(loadedSeats){while(loadedSeats.length<30)loadedSeats.push(null);state.seats=loadedSeats}
+  var loadedPrevious=remapSeats(payload.previousSeats);
+  state.previousSeats=loadedPrevious;
+  state.locked=Array.isArray(payload.locked)?payload.locked.map(remap).filter(Boolean):[];
+  state.layout=payload.layout||state.layout;
+  state.view=payload.view||state.view;
+  state.pairGenderMode=payload.pairGenderMode||state.pairGenderMode;
   renderAll();alert("Restriksjonene er lastet inn og kan nå oppdateres.");
 }
 
