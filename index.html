@@ -339,7 +339,8 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
     <div class="panel-section">
       <h3>Elevrestriksjoner</h3>
       <div class="help">Bruk ⋯ ved en elev for å legge til regler. Her vises elever som har regler.</div>
-      <button class="btn" id="loadSavedRestrictions" style="width:100%;margin-top:10px">🔐 Last inn lagrede restriksjoner</button>
+      <button class="btn" id="saveCloudRestrictions" style="width:100%;margin-top:10px">☁ Lagre restriksjoner på nett</button>
+      <button class="btn" id="loadSavedRestrictions" style="width:100%;margin-top:8px">☁ Last inn lagrede restriksjoner</button>
       <div id="rulesOverview" class="rule-list"></div>
     </div>
   </div>
@@ -464,6 +465,17 @@ body.print-mode .room{width:min(760px,96vw);min-height:790px}
   </div>
 </div>
 
+<div class="modal-backdrop hidden" id="cloudPasswordModal" aria-hidden="true">
+  <div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="cloudPasswordTitle">
+    <div class="modal-head"><div><h2 id="cloudPasswordTitle">Passord</h2><p id="cloudPasswordHelp">Passordet vises ikke og lagres ikke.</p></div><button class="icon" id="closeCloudPassword" type="button">×</button></div>
+    <label for="cloudPasswordInput">Passord</label>
+    <input id="cloudPasswordInput" class="input" type="password" autocomplete="current-password">
+    <div class="modal-actions"><button class="btn" id="cancelCloudPassword" type="button">Avbryt</button><button class="btn primary" id="confirmCloudPassword" type="button">Fortsett</button></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="./supabase-config.js"></script>
 <script>
 (function(){
 "use strict";
@@ -824,6 +836,64 @@ function saveRestrictionsProfile(){
     students:state.students.map(function(student){return{id:student.id,name:student.name}}),
     rules:clone(state.rules)
   });
+}
+
+var cloudSupabase=(window.supabase&&window.KLASSEKART_SUPABASE_CONFIG)?
+  window.supabase.createClient(window.KLASSEKART_SUPABASE_CONFIG.url,window.KLASSEKART_SUPABASE_CONFIG.publishableKey):null;
+var CLOUD_PROFILE_ID="main-classroom";
+function bytesToBase64(bytes){var binary="";bytes.forEach(function(byte){binary+=String.fromCharCode(byte)});return btoa(binary)}
+function base64ToBytes(value){var binary=atob(value),bytes=new Uint8Array(binary.length);for(var i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return bytes}
+async function encryptionKey(password,salt){
+  var material=await crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt:salt,iterations:150000,hash:"SHA-256"},material,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+async function encryptRestrictions(password,payload){
+  var salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  var key=await encryptionKey(password,salt);
+  var encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv:iv},key,new TextEncoder().encode(JSON.stringify(payload)));
+  return {encrypted_data:bytesToBase64(new Uint8Array(encrypted)),salt:bytesToBase64(salt),iv:bytesToBase64(iv)};
+}
+async function decryptRestrictions(password,row){
+  var key=await encryptionKey(password,base64ToBytes(row.salt));
+  var decrypted=await crypto.subtle.decrypt({name:"AES-GCM",iv:base64ToBytes(row.iv)},key,base64ToBytes(row.encrypted_data));
+  return JSON.parse(new TextDecoder().decode(decrypted));
+}
+function askCloudPassword(title,help){
+  return new Promise(function(resolve){
+    var modal=gid("cloudPasswordModal"),input=gid("cloudPasswordInput");
+    gid("cloudPasswordTitle").textContent=title;gid("cloudPasswordHelp").textContent=help;
+    input.value="";modal.classList.remove("hidden");modal.setAttribute("aria-hidden","false");input.focus();
+    var finish=function(value){modal.classList.add("hidden");modal.setAttribute("aria-hidden","true");gid("confirmCloudPassword").onclick=null;gid("cancelCloudPassword").onclick=null;gid("closeCloudPassword").onclick=null;resolve(value)};
+    gid("confirmCloudPassword").onclick=function(){finish(input.value)};
+    gid("cancelCloudPassword").onclick=function(){finish(null)};
+    gid("closeCloudPassword").onclick=function(){finish(null)};
+    input.onkeydown=function(event){if(event.key==="Enter")finish(input.value);if(event.key==="Escape")finish(null)};
+  });
+}
+async function saveCloudRestrictions(){
+  if(!cloudSupabase){alert("Supabase-konfigurasjonen mangler.");return}
+  var password=await askCloudPassword("Lagre restriksjoner","Passordet krypterer restriksjonene før de lagres.");
+  if(password===null)return;
+  if(!password){alert("Skriv inn et passord.");return}
+  var encrypted=await encryptRestrictions(password,{students:state.students.map(function(student){return{id:student.id,name:student.name}}),rules:state.rules});
+  var result=await cloudSupabase.from("klassekart_restrictions").upsert({profile_id:CLOUD_PROFILE_ID,updated_at:new Date().toISOString(),encrypted_data:encrypted.encrypted_data,salt:encrypted.salt,iv:encrypted.iv},{onConflict:"profile_id"});
+  if(result.error)alert("Kunne ikke lagre restriksjonene: "+result.error.message);
+  else alert("Restriksjonene er lagret på nett. Du kan laste dem inn fra en annen PC med samme passord.");
+}
+async function loadCloudRestrictions(){
+  if(!cloudSupabase){alert("Supabase-konfigurasjonen mangler.");return}
+  var password=await askCloudPassword("Last inn restriksjoner","Skriv passordet. Det vises ikke og lagres ikke.");
+  if(password===null)return;
+  var result=await cloudSupabase.from("klassekart_restrictions").select("encrypted_data,salt,iv").eq("profile_id",CLOUD_PROFILE_ID).maybeSingle();
+  if(result.error){alert("Kunne ikke hente restriksjonene: "+result.error.message);return}
+  if(!result.data){alert("Fant ingen lagrede restriksjoner på nett.");return}
+  var payload;
+  try{payload=await decryptRestrictions(password,result.data)}catch(_error){alert("Feil passord eller ødelagte data.");return}
+  var currentByName={};state.students.forEach(function(student){currentByName[student.name.trim().toLowerCase()]=student.id});
+  var idMap={};(payload.students||[]).forEach(function(student){idMap[student.id]=currentByName[student.name.trim().toLowerCase()]||student.id});
+  var remap=function(id){return idMap[id]||id};
+  commit();state.rules={};Object.keys(payload.rules||{}).forEach(function(id){var mapped=remap(id);if(studentById(mapped))state.rules[mapped]=clone(payload.rules[id])});
+  renderAll();alert("Restriksjonene er lastet inn og kan nå oppdateres.");
 }
 
 function loadSavedRestrictions(){
@@ -1783,7 +1853,8 @@ function bind(){
   gid("printNowBtn").addEventListener("click",openPrintDialog);
   gid("downloadPrintBtn").addEventListener("click",downloadPrintable);
   gid("exitPrintBtn").addEventListener("click",exitPrintMode);
-  gid("loadSavedRestrictions").addEventListener("click",loadSavedRestrictions);
+  gid("saveCloudRestrictions").addEventListener("click",saveCloudRestrictions);
+  gid("loadSavedRestrictions").addEventListener("click",loadCloudRestrictions);
   gid("sortBtn").addEventListener("click",function(){commit();state.students.sort(function(a,b){return a.name.localeCompare(b.name,"no")});renderAll()});
   gid("searchInput").addEventListener("input",renderStudents);
   gid("addStudentBtn").addEventListener("click",addStudent);gid("newStudent").addEventListener("keydown",function(e){if(e.key==="Enter")addStudent()});
